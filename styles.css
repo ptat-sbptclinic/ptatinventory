@@ -36,12 +36,16 @@ body {
   color: var(--gray-900);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 #app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 /* ========== Header ========== */
@@ -53,13 +57,14 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  flex-shrink: 0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 0.5rem 1rem;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -105,7 +110,7 @@ body {
 .nav-tab {
   flex: 1;
   min-width: 80px;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.7);
@@ -135,15 +140,21 @@ body {
 /* ========== Main Content ========== */
 
 .app-main {
-  flex: 1;
-  padding: 1rem;
-  max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
+  background-color: var(--gray-50);
+  min-height: calc(100vh - 120px);
+}
+
+.content {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  background-color: var(--gray-50);
 }
 
 .view {
   display: none;
+  width: 100%;
 }
 
 .view.active {
@@ -151,15 +162,15 @@ body {
 }
 
 .container {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
 }
 
 .container h2 {
   font-size: 1.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: var(--gray-800);
 }
 
@@ -169,8 +180,10 @@ body {
 }
 
 .subtitle {
+  font-size: 0.875rem;
   color: var(--gray-600);
-  margin-bottom: 1rem;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
 }
 
 /* ========== Login View ========== */
@@ -179,7 +192,8 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 80vh;
+  padding: 2rem 1rem;
+  width: 100%;
 }
 
 .login-card {
@@ -410,10 +424,14 @@ textarea.form-control {
 }
 
 .status-badge {
+  display: inline-flex;
+  align-items: center;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .status-badge[data-status="可用"] {
@@ -442,7 +460,9 @@ textarea.form-control {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .inventory-badge {
@@ -453,6 +473,8 @@ textarea.form-control {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .inventory-badge.inventoried {
@@ -622,7 +644,7 @@ textarea.form-control {
 .search-section {
   display: flex;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -689,7 +711,13 @@ textarea.form-control {
   display: flex;
   justify-content: space-between;
   align-items: start;
+  gap: 0.75rem;
   margin-bottom: 0.75rem;
+}
+
+.equipment-card-header > div:first-child {
+  flex: 1;
+  min-width: 0;
 }
 
 .equipment-card-title {
@@ -725,7 +753,7 @@ textarea.form-control {
 .loan-tabs, .my-tabs {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -970,5 +998,32 @@ textarea.form-control {
   
   .scan-input-group {
     flex-direction: column;
+  }
+
+  .equipment-card-header {
+    position: relative;
+    padding-right: 110px;
+    min-height: 3.2rem;
+    align-items: flex-start;
+  }
+
+  .equipment-card-header > div:first-child {
+    padding-right: 0;
+  }
+
+  .header-badges {
+    position: absolute;
+    top: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+  }
+
+  .status-badge,
+  .inventory-badge {
+    font-size: 0.72rem;
+    line-height: 1.1;
   }
 }
