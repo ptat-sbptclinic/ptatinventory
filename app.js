@@ -50,8 +50,16 @@ function setupEventListeners() {
   document.getElementById('filterStatus').addEventListener('change', loadEquipmentList);
   document.getElementById('searchInput').addEventListener('input', handleSearch);
   document.getElementById('mySearchInput').addEventListener('input', handleMySearch);
-  document.getElementById('startScanBtn').addEventListener('click', startBarcodeScanner);
-  document.getElementById('stopScanBtn').addEventListener('click', stopBarcodeScanner);
+  
+  // 掃描按鈕事件（如果存在）
+  const startScanBtn = document.getElementById('startScanBtn');
+  const stopScanBtn = document.getElementById('stopScanBtn');
+  if (startScanBtn) {
+    startScanBtn.addEventListener('click', startBarcodeScanner);
+  }
+  if (stopScanBtn) {
+    stopScanBtn.addEventListener('click', stopBarcodeScanner);
+  }
   
   const mySearchInput = document.getElementById('mySearchInput');
   if (mySearchInput) {
@@ -174,28 +182,29 @@ function showLoginView(show) {
 // ==========================================
 
 function switchView(viewName) {
-  const allViews = ['scanView', 'listView', 'loanView', 'myView'];
-  allViews.forEach(viewId => {
-    const view = document.getElementById(viewId);
-    if (view) {
-      view.style.display = 'none';
-    }
+  // 移除所有視圖的 active 類別
+  document.querySelectorAll('.view').forEach(view => {
+    view.classList.remove('active');
   });
   
+  // 移除所有標籤的 active 類別
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.remove('active');
   });
   
+  // 顯示目標視圖
   const targetView = document.getElementById(viewName + 'View');
   if (targetView) {
-    targetView.style.display = 'block';
+    targetView.classList.add('active');
   }
   
+  // 標記活動標籤
   const activeTab = document.querySelector(`[data-view="${viewName}"]`);
   if (activeTab) {
     activeTab.classList.add('active');
   }
   
+  // 載入對應資料
   switch(viewName) {
     case 'list':
       loadEquipmentList();
