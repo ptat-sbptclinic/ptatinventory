@@ -46,10 +46,12 @@ function setupEventListeners() {
   
   document.getElementById('applyFilterBtn').addEventListener('click', loadEquipmentList);
   
-  const searchInput = document.getElementById('searchInput');
-  if (searchInput) {
-    searchInput.addEventListener('input', handleSearch);
-  }
+  document.getElementById('filterArea').addEventListener('change', loadEquipmentList);
+  document.getElementById('filterStatus').addEventListener('change', loadEquipmentList);
+  document.getElementById('searchInput').addEventListener('input', handleSearch);
+  document.getElementById('mySearchInput').addEventListener('input', handleMySearch);
+  document.getElementById('startScanBtn').addEventListener('click', startBarcodeScanner);
+  document.getElementById('stopScanBtn').addEventListener('click', stopBarcodeScanner);
   
   const mySearchInput = document.getElementById('mySearchInput');
   if (mySearchInput) {
@@ -753,4 +755,144 @@ function showToast(message, type) {
   setTimeout(() => {
     toast.className = 'toast';
   }, 3000);
+}
+
+// ==========================================
+// 條碼掃描功能
+// ==========================================
+
+let scannerStream = null;
+let scannerAnimationFrame = null;
+let isScanning = false;
+
+async function startBarcodeScanner() {
+  if (!currentUser) {
+    alert('請先登入');
+    return;
+  }
+  
+  const video = document.getElementById('scannerVideo');
+  const canvas = document.getElementById('scannerCanvas');
+  const container = document.getElementById('scannerContainer');
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+  const resultDiv = document.getElementById('scanResult');
+  
+  try {
+    // 請求相機權限
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' } // 使用後置相機
+    });
+    
+    video.srcObject = scannerStream;
+    container.style.display = 'block';
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+    resultDiv.style.display = 'none';
+    
+    isScanning = true;
+    
+    // 開始掃描條碼
+    scanBarcode(video, canvas);
+    
+  } catch (error) {
+    console.error('相機啟動失敗:', error);
+    alert('無法啟動相機，請確認已授予相機權限');
+  }
+}
+
+function stopBarcodeScanner() {
+  const video = document.getElementById('scannerVideo');
+  const container = document.getElementById('scannerContainer');
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+  
+  isScanning = false;
+  
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null;
+  }
+  
+  if (scannerAnimationFrame) {
+    cancelAnimationFrame(scannerAnimationFrame);
+    scannerAnimationFrame = null;
+  }
+  
+  video.srcObject = null;
+  container.style.display = 'none';
+  startBtn.style.display = 'inline-block';
+  stopBtn.style.display = 'none';
+}
+
+function scanBarcode(video, canvas) {
+  if (!isScanning) return;
+  
+  const context = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  
+  if (canvas.width > 0 && canvas.height > 0) {
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // 使用 ZXing 或其他條碼庫解析
+    // 這裡先使用簡化版本：手動輸入條碼
+    // 實際使用時需要整合條碼掃描庫
+    
+    // 暫時使用 prompt 模擬掃描結果
+    // TODO: 整合真正的條碼掃描庫
+  }
+  
+  scannerAnimationFrame = requestAnimationFrame(() => scanBarcode(video, canvas));
+}
+
+function handleBarcodeDetected(barcode) {
+  if (!isScanning) return;
+  
+  isScanning = false;
+  stopBarcodeScanner();
+  
+  const resultDiv = document.getElementById('scanResult');
+  resultDiv.innerHTML = `
+    <p><strong>掃描到條碼：</strong>${barcode}</p>
+    <p>正在處理盤點...</p>
+  `;
+  resultDiv.style.display = 'block';
+  
+  // 執行快速盤點
+  callAPI('quickInventory', {
+    propertyId: barcode,
+    staffName: currentUser.name,
+    photoData: '',
+    newLocation: '',
+    newCurrentStatus: ''
+  }, function(response) {
+    if (response.success) {
+      resultDiv.innerHTML = `
+        <p style="color: #059669;"><i class="fas fa-check-circle"></i> 盤點成功！</p>
+        <p><strong>財產編號：</strong>${barcode}</p>
+        <button class="btn btn-primary" onclick="location.reload()">
+          <i class="fas fa-redo"></i> 繼續掃描
+        </button>
+      `;
+      showToast('盤點成功！', 'success');
+    } else {
+      resultDiv.innerHTML = `
+        <p style="color: #DC2626;"><i class="fas fa-times-circle"></i> 盤點失敗</p>
+        <p>${response.message}</p>
+        <button class="btn btn-primary" onclick="location.reload()">
+          <i class="fas fa-redo"></i> 重試
+        </button>
+      `;
+      showToast('盤點失敗：' + response.message, 'error');
+    }
+  });
+}
+
+// 暫時的手動輸入功能（用於測試）
+window.testScan = function() {
+  const barcode = prompt('請輸入財產編號（測試用）：');
+  if (barcode) {
+    handleBarcodeDetected(barcode);
+  }
 }
