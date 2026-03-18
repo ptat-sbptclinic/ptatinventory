@@ -83,12 +83,7 @@
           </div>
           
           <div id="scannerContainer" class="scanner-container" style="display: none;">
-            <video id="scannerVideo" autoplay playsinline></video>
-            <canvas id="scannerCanvas" style="display: none;"></canvas>
-            <div class="scanner-overlay">
-              <div class="scanner-frame"></div>
-              <p class="scanner-hint">將條碼對準框內</p>
-            </div>
+            <div id="html5QrReader"></div>
           </div>
           
           <div class="scan-controls">
@@ -100,38 +95,7 @@
             </button>
           </div>
           
-          <div id="scanResult" class="scan-result" style="display: none;">
-            <div class="info-row">
-              <span class="label">輔具名稱：</span>
-              <span class="value" id="resultName"></span>
-            </div>
-            <div class="info-row">
-              <span class="label">類別：</span>
-              <span class="value" id="resultCategory"></span>
-            </div>
-            <div class="info-row">
-              <span class="label">區域：</span>
-              <span class="value" id="resultArea"></span>
-            </div>
-            <div class="info-row">
-              <span class="label">管理人員：</span>
-              <span class="value" id="resultManager"></span>
-            </div>
-            <div class="info-row">
-              <span class="label">目前位置：</span>
-              <span class="value" id="resultLocation"></span>
-            </div>
-            <div class="info-row">
-              <span class="label">狀態：</span>
-              <span class="value status-badge" id="resultStatus"></span>
-                  </button>
-                  <button id="confirmInventoryBtn" class="btn btn-primary">
-                    <i class="fas fa-check"></i> 確認盤點
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div id="scanResult" class="scan-result" style="display: none;"></div>
         </div>
       </div>
 
@@ -329,7 +293,6 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
-  <script src="scanner.js"></script>
   <script src="camera.js"></script>
   <script src="signature.js"></script>
   
