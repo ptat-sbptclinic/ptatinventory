@@ -2,67 +2,69 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#4F46E5">
+  <meta name="description" content="輔具盤點管理系統">
   <title>輔具盤點管理系統</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  
   <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- 條碼掃描庫 -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <div id="app">
-    <!-- 導航列 -->
-    <nav class="navbar" id="navbar" style="display: none;">
-      <div class="nav-brand">
-        <i class="fas fa-clipboard-check"></i>
-        <span>輔具盤點系統</span>
+    <header class="app-header">
+      <div class="header-content">
+        <h1><i class="fas fa-wheelchair"></i> 輔具盤點系統</h1>
+        <div class="user-info">
+          <span id="currentUser">未登入</span>
+          <button id="logoutBtn" class="btn-icon" style="display: none;">
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
+        </div>
       </div>
-      <div class="nav-tabs">
+      <nav class="nav-tabs" id="navTabs" style="display: none;">
         <button class="nav-tab" data-view="scan">
-          <i class="fas fa-qrcode"></i>
-          <span>掃描盤點</span>
+          <i class="fas fa-qrcode"></i> 掃描盤點
         </button>
         <button class="nav-tab" data-view="list">
-          <i class="fas fa-list"></i>
-          <span>輔具清單</span>
+          <i class="fas fa-list"></i> 輔具清單
         </button>
         <button class="nav-tab" data-view="loan">
-          <i class="fas fa-handshake"></i>
-          <span>外借管理</span>
+          <i class="fas fa-handshake"></i> 外借管理
         </button>
-        <button class="nav-tab active" data-view="my">
-          <i class="fas fa-user"></i>
-          <span>我的輔具</span>
+        <button class="nav-tab" data-view="my">
+          <i class="fas fa-user"></i> 我的輔具
         </button>
-      </div>
-      <button class="logout-btn" id="logoutBtn">
-        <i class="fas fa-sign-out-alt"></i>
-        <span id="currentUserName"></span>
-      </button>
-    </nav>
+      </nav>
+    </header>
 
-    <div class="content">
+    <main class="app-main">
       <!-- 登入頁面 -->
       <div id="loginView" class="view active">
         <div class="login-container">
           <div class="login-card">
-            <div class="login-header">
-              <i class="fas fa-clipboard-check"></i>
-              <h1>輔具盤點管理系統</h1>
-              <p>屏東縣輔具資源中心</p>
+            <i class="fas fa-wheelchair login-icon"></i>
+            <h2>輔具盤點管理系統</h2>
+            <p class="login-subtitle">請選擇您的姓名登入</p>
+            
+            <div class="form-group">
+              <label for="staffSelect">
+                <i class="fas fa-user"></i> 選擇人員
+              </label>
+              <select id="staffSelect" class="form-control">
+                <option value="">請選擇...</option>
+              </select>
             </div>
             
-            <div class="login-body">
-              <div class="form-group">
-                <label>選擇人員</label>
-                <select id="staffSelect" class="form-control">
-                  <option value="">請選擇...</option>
-                </select>
-              </div>
-              
-              <button id="loginBtn" class="btn btn-primary btn-large">
-                <i class="fas fa-sign-in-alt"></i> 登入系統
-              </button>
-            </div>
+            <button id="loginBtn" class="btn btn-primary btn-block">
+              <i class="fas fa-sign-in-alt"></i> 登入系統
+            </button>
             
             <div class="login-footer">
               <p>屏中區 + 屏北區整合版</p>
@@ -78,9 +80,6 @@
           
           <div class="scan-instructions">
             <p><i class="fas fa-info-circle"></i> 使用手機相機掃描輔具條碼進行盤點</p>
-            <p style="font-size: 0.875rem; color: #9CA3AF; margin-top: 0.5rem;">
-              測試模式：點選「測試掃描」按鈕手動輸入財產編號
-            </p>
           </div>
           
           <div id="scannerContainer" class="scanner-container" style="display: none;">
@@ -99,12 +98,40 @@
             <button id="stopScanBtn" class="btn btn-secondary" style="display: none;">
               <i class="fas fa-stop"></i> 停止掃描
             </button>
-            <button onclick="testScan()" class="btn btn-secondary">
-              <i class="fas fa-keyboard"></i> 測試掃描
-            </button>
           </div>
           
-          <div id="scanResult" class="scan-result" style="display: none;"></div>
+          <div id="scanResult" class="scan-result" style="display: none;">
+            <div class="info-row">
+              <span class="label">輔具名稱：</span>
+              <span class="value" id="resultName"></span>
+            </div>
+            <div class="info-row">
+              <span class="label">類別：</span>
+              <span class="value" id="resultCategory"></span>
+            </div>
+            <div class="info-row">
+              <span class="label">區域：</span>
+              <span class="value" id="resultArea"></span>
+            </div>
+            <div class="info-row">
+              <span class="label">管理人員：</span>
+              <span class="value" id="resultManager"></span>
+            </div>
+            <div class="info-row">
+              <span class="label">目前位置：</span>
+              <span class="value" id="resultLocation"></span>
+            </div>
+            <div class="info-row">
+              <span class="label">狀態：</span>
+              <span class="value status-badge" id="resultStatus"></span>
+                  </button>
+                  <button id="confirmInventoryBtn" class="btn btn-primary">
+                    <i class="fas fa-check"></i> 確認盤點
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -130,7 +157,6 @@
                 <option value="展示中">展示中</option>
                 <option value="外借中">外借中</option>
                 <option value="維護中">維護中</option>
-                <option value="報廢">報廢</option>
               </select>
             </div>
             
@@ -143,7 +169,7 @@
             <div class="search-group">
               <i class="fas fa-search"></i>
               <input type="text" id="searchInput" class="form-control" 
-                     placeholder="搜尋財產編號、保管人、品名、地點...">
+                     placeholder="搜尋財產編號、庫存編號或輔具品名...">
             </div>
             <div class="count-display">
               <span id="equipmentCount">共 0 筆</span>
@@ -206,19 +232,113 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
+    </main>
 
-  <!-- Toast 通知 -->
-  <div id="toast" class="toast"></div>
-  
-  <!-- Loading 指示器 -->
-  <div id="loader" class="loader">
-    <div class="spinner"></div>
-    <p>處理中...</p>
+    <!-- 照片上傳 Modal -->
+    <div id="photoModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-camera"></i> 拍照上傳</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <video id="photoVideo" playsinline autoplay></video>
+          <canvas id="photoCanvas" style="display: none;"></canvas>
+          <img id="photoPreview" style="display: none;">
+          
+          <div class="button-group">
+            <button id="capturePhotoBtn" class="btn btn-primary">
+              <i class="fas fa-camera"></i> 拍照
+            </button>
+            <button id="retakePhotoBtn" class="btn btn-secondary" style="display: none;">
+              <i class="fas fa-redo"></i> 重拍
+            </button>
+            <button id="uploadPhotoBtn" class="btn btn-success" style="display: none;">
+              <i class="fas fa-upload"></i> 上傳
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 外借 Modal -->
+    <div id="loanModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-handshake"></i> 建立外借記錄</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>輔具編號</label>
+            <input type="text" id="loanEquipmentId" class="form-control" readonly>
+          </div>
+          
+          <div class="form-group">
+            <label>輔具名稱</label>
+            <input type="text" id="loanEquipmentName" class="form-control" readonly>
+          </div>
+          
+          <div class="form-group">
+            <label>外借單位 *</label>
+            <input type="text" id="loanBorrowUnit" class="form-control" required>
+          </div>
+          
+          <div class="form-group">
+            <label>聯絡人 *</label>
+            <input type="text" id="loanContactPerson" class="form-control" required>
+          </div>
+          
+          <div class="form-group">
+            <label>聯絡電話 *</label>
+            <input type="tel" id="loanContactPhone" class="form-control" required>
+          </div>
+          
+          <div class="form-group">
+            <label>預計歸還日期</label>
+            <input type="date" id="loanExpectedReturnDate" class="form-control">
+          </div>
+          
+          <div class="form-group">
+            <label>電子簽名</label>
+            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+            <button id="clearSignatureBtn" class="btn btn-secondary btn-sm">
+              <i class="fas fa-eraser"></i> 清除簽名
+            </button>
+          </div>
+          
+          <div class="button-group">
+            <button id="cancelLoanBtn" class="btn btn-secondary">取消</button>
+            <button id="submitLoanBtn" class="btn btn-primary">
+              <i class="fas fa-check"></i> 建立外借
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+      <div class="spinner"></div>
+      <p>處理中...</p>
+    </div>
   </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="scanner.js"></script>
+  <script src="camera.js"></script>
+  <script src="signature.js"></script>
+  
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(reg => console.log('Service Worker 註冊成功'))
+        .catch(err => console.log('Service Worker 註冊失敗', err));
+    }
+  </script>
 </body>
 </html>
