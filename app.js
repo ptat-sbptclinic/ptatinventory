@@ -6,6 +6,7 @@ let currentUser = null;
 let staffList = [];
 let allEquipmentList = [];
 let myEquipmentList = [];
+let currentInventoryStatus = '';
 let html5QrCode = null;
 let isScannerRunning = false;
 let isProcessingScanResult = false;
@@ -60,6 +61,8 @@ function setupEventListeners() {
   if (mySearchInput) {
     mySearchInput.addEventListener('input', handleMySearch);
   }
+
+  setupMyTabs();
 
   const startScanBtn = document.getElementById('startScanBtn');
   if (startScanBtn) {
@@ -272,6 +275,9 @@ function createEquipmentCard(equipment) {
   card.className = 'equipment-card';
   
   const area = getEquipmentArea(equipment);
+  const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
+  const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
+  const inventoryText = isInventoried ? '已盤點' : '未盤點';
   
   card.innerHTML = `
     <div class="equipment-card-header">
@@ -279,7 +285,10 @@ function createEquipmentCard(equipment) {
         <div class="equipment-card-title">${equipment.equipmentName}</div>
         <div class="equipment-card-id">${equipment.propertyId}</div>
       </div>
-      <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
+      <div class="header-badges">
+        <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
+        <span class="inventory-badge ${inventoryClass}">${inventoryText}</span>
+      </div>
     </div>
     <div class="equipment-card-body">
       <div class="equipment-card-row">
@@ -340,10 +349,55 @@ function loadMyEquipment() {
   callAPI('getEquipmentByStaff', { staffName: currentUser.name }, function(response) {
     if (response.success) {
       myEquipmentList = response.data;
-      displayMyEquipmentList(response.data, listContainer, countDisplay);
+      const filteredList = filterMyEquipmentList();
+      displayMyEquipmentList(filteredList, listContainer, countDisplay);
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
     }
+  });
+}
+
+function setupMyTabs() {
+  const tabs = document.querySelectorAll('.my-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+      tabs.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+
+      currentInventoryStatus = this.dataset.inventoryStatus || '';
+
+      const filteredList = filterMyEquipmentList();
+      const container = document.getElementById('myEquipmentList');
+      const countDisplay = document.getElementById('myEquipmentCount');
+      displayMyEquipmentList(filteredList, container, countDisplay);
+    });
+  });
+}
+
+function filterMyEquipmentList(searchTerm = '') {
+  let filteredList = myEquipmentList;
+
+  if (currentInventoryStatus) {
+    filteredList = filteredList.filter(equipment => {
+      const inventoried = isInventoriedThisMonth(equipment.lastInventory);
+      if (currentInventoryStatus === 'inventoried') {
+        return inventoried;
+      }
+      if (currentInventoryStatus === 'not-inventoried') {
+        return !inventoried;
+      }
+      return true;
+    });
+  }
+
+  if (!searchTerm) {
+    return filteredList;
+  }
+
+  return filteredList.filter(equipment => {
+    return (equipment.propertyId && equipment.propertyId.toLowerCase().includes(searchTerm)) ||
+           (equipment.inventoryId && equipment.inventoryId.toLowerCase().includes(searchTerm)) ||
+           (equipment.equipmentName && equipment.equipmentName.toLowerCase().includes(searchTerm));
   });
 }
 
@@ -371,6 +425,9 @@ function createMyEquipmentCard(equipment) {
   card.className = 'equipment-card';
   
   const area = getEquipmentArea(equipment);
+  const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
+  const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
+  const inventoryText = isInventoried ? '已盤點' : '未盤點';
   
   card.innerHTML = `
     <div class="equipment-card-header">
@@ -378,7 +435,10 @@ function createMyEquipmentCard(equipment) {
         <div class="equipment-card-title">${equipment.equipmentName}</div>
         <div class="equipment-card-id">${equipment.propertyId}</div>
       </div>
-      <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
+      <div class="header-badges">
+        <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
+        <span class="inventory-badge ${inventoryClass}">${inventoryText}</span>
+      </div>
     </div>
     <div class="equipment-card-body">
       <div class="equipment-card-row">
@@ -408,23 +468,30 @@ function createMyEquipmentCard(equipment) {
 
 function handleMySearch(e) {
   const searchTerm = e.target.value.trim().toLowerCase();
-  
-  if (!searchTerm) {
-    const container = document.getElementById('myEquipmentList');
-    const countDisplay = document.getElementById('myEquipmentCount');
-    displayMyEquipmentList(myEquipmentList, container, countDisplay);
-    return;
-  }
-  
-  const filtered = myEquipmentList.filter(equipment => {
-    return (equipment.propertyId && equipment.propertyId.toLowerCase().includes(searchTerm)) ||
-           (equipment.inventoryId && equipment.inventoryId.toLowerCase().includes(searchTerm)) ||
-           (equipment.equipmentName && equipment.equipmentName.toLowerCase().includes(searchTerm));
-  });
-  
+  const filtered = filterMyEquipmentList(searchTerm);
+
   const container = document.getElementById('myEquipmentList');
   const countDisplay = document.getElementById('myEquipmentCount');
   displayMyEquipmentList(filtered, container, countDisplay);
+}
+
+function isInventoriedThisMonth(lastInventory) {
+  if (!lastInventory) return false;
+
+  let inventoryDate;
+  if (typeof lastInventory === 'string') {
+    inventoryDate = new Date(lastInventory);
+  } else {
+    inventoryDate = lastInventory;
+  }
+
+  if (!inventoryDate || isNaN(inventoryDate.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  return inventoryDate.getFullYear() === now.getFullYear() &&
+         inventoryDate.getMonth() === now.getMonth();
 }
 
 window.quickInventory = function(propertyId) {
