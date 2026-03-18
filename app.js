@@ -6,6 +6,10 @@ let currentUser = null;
 let staffList = [];
 let allEquipmentList = [];
 let myEquipmentList = [];
+let html5QrCode = null;
+let isScannerRunning = false;
+let isProcessingScanResult = false;
+let lastScannedCode = '';
 
 // ==========================================
 // 初始化
@@ -55,6 +59,16 @@ function setupEventListeners() {
   const mySearchInput = document.getElementById('mySearchInput');
   if (mySearchInput) {
     mySearchInput.addEventListener('input', handleMySearch);
+  }
+
+  const startScanBtn = document.getElementById('startScanBtn');
+  if (startScanBtn) {
+    startScanBtn.addEventListener('click', startBarcodeScanner);
+  }
+
+  const stopScanBtn = document.getElementById('stopScanBtn');
+  if (stopScanBtn) {
+    stopScanBtn.addEventListener('click', stopBarcodeScanner);
   }
 }
 
@@ -173,6 +187,10 @@ function showLoginView(show) {
 // ==========================================
 
 function switchView(viewName) {
+  if (viewName !== 'scan') {
+    stopBarcodeScanner();
+  }
+
   const allViews = ['scanView', 'listView', 'loanView', 'myView'];
   allViews.forEach(viewId => {
     const view = document.getElementById(viewId);
@@ -567,6 +585,168 @@ function createLoanCard(equipment) {
   
   return card;
 }
+
+// ==========================================
+// 條碼掃描與盤點
+// ==========================================
+
+function normalizeScannedCode(rawText) {
+  if (!rawText) return '';
+  return rawText.replace(/\s+/g, '').trim();
+}
+
+async function startBarcodeScanner() {
+  if (!currentUser) {
+    showToast('請先登入', 'error');
+    return;
+  }
+
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('掃描元件未載入，請重新整理頁面', 'error');
+    return;
+  }
+
+  const container = document.getElementById('scannerContainer');
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+  const resultDiv = document.getElementById('scanResult');
+
+  if (!container || !startBtn || !stopBtn) {
+    showToast('掃描介面初始化失敗', 'error');
+    return;
+  }
+
+  if (!html5QrCode) {
+    html5QrCode = new Html5Qrcode('html5QrReader');
+  }
+
+  container.style.display = 'block';
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-flex';
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+
+  const scanConfig = {
+    fps: 10,
+    qrbox: { width: 260, height: 120 },
+    aspectRatio: 1.777,
+    rememberLastUsedCamera: true
+  };
+
+  try {
+    await html5QrCode.start(
+      { facingMode: { exact: 'environment' } },
+      scanConfig,
+      onScanSuccess,
+      () => {}
+    );
+    isScannerRunning = true;
+  } catch (exactError) {
+    try {
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        scanConfig,
+        onScanSuccess,
+        () => {}
+      );
+      isScannerRunning = true;
+    } catch (error) {
+      console.error('啟動掃描失敗:', error);
+      showToast('無法啟動相機掃描，請確認相機權限', 'error');
+      stopBarcodeScanner();
+    }
+  }
+}
+
+async function stopBarcodeScanner() {
+  const container = document.getElementById('scannerContainer');
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+
+  if (html5QrCode && isScannerRunning) {
+    try {
+      await html5QrCode.stop();
+      await html5QrCode.clear();
+    } catch (error) {
+      console.warn('停止掃描時發生錯誤:', error);
+    }
+  }
+
+  isScannerRunning = false;
+  isProcessingScanResult = false;
+  lastScannedCode = '';
+
+  if (container) container.style.display = 'none';
+  if (startBtn) startBtn.style.display = 'inline-flex';
+  if (stopBtn) stopBtn.style.display = 'none';
+}
+
+function onScanSuccess(decodedText) {
+  const barcode = normalizeScannedCode(decodedText);
+  if (!barcode) return;
+
+  if (isProcessingScanResult) return;
+  if (barcode === lastScannedCode) return;
+
+  isProcessingScanResult = true;
+  lastScannedCode = barcode;
+  handleBarcodeDetected(barcode);
+}
+
+function handleBarcodeDetected(barcode) {
+  stopBarcodeScanner();
+
+  const resultDiv = document.getElementById('scanResult');
+  if (!resultDiv) return;
+
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = `
+    <p><strong>掃描到條碼：</strong>${barcode}</p>
+    <p>正在完成盤點...</p>
+  `;
+
+  callAPI('quickInventory', {
+    propertyId: barcode,
+    staffName: currentUser.name,
+    photoData: '',
+    newLocation: '',
+    newCurrentStatus: ''
+  }, function(response) {
+    isProcessingScanResult = false;
+
+    if (response.success) {
+      resultDiv.innerHTML = `
+        <p style="color: #059669;"><i class="fas fa-check-circle"></i> 盤點成功</p>
+        <p><strong>財產編號：</strong>${barcode}</p>
+        <button class="btn btn-primary" onclick="restartBarcodeScanner()">
+          <i class="fas fa-redo"></i> 繼續掃描
+        </button>
+      `;
+      showToast('掃描盤點成功', 'success');
+      loadMyEquipment();
+    } else {
+      resultDiv.innerHTML = `
+        <p style="color: #DC2626;"><i class="fas fa-times-circle"></i> 盤點失敗</p>
+        <p>${response.message || '請確認條碼是否正確'}</p>
+        <button class="btn btn-primary" onclick="restartBarcodeScanner()">
+          <i class="fas fa-redo"></i> 重新掃描
+        </button>
+      `;
+      showToast('盤點失敗：' + (response.message || '未知錯誤'), 'error');
+    }
+  });
+}
+
+window.restartBarcodeScanner = function() {
+  const resultDiv = document.getElementById('scanResult');
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+  startBarcodeScanner();
+};
 
 // ==========================================
 // 工具函數
