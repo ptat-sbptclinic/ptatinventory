@@ -592,7 +592,21 @@ function createLoanCard(equipment) {
 
 function normalizeScannedCode(rawText) {
   if (!rawText) return '';
-  return rawText.replace(/\s+/g, '').trim();
+
+  let normalized = String(rawText).trim();
+
+  // 移除 AIM/GS1 symbology identifier，例如 ]C1、]E0、]Q3
+  normalized = normalized.replace(/^\][A-Za-z][0-9]/, '');
+
+  // 移除控制字元（含 GS/FNC1）
+  normalized = normalized.replace(/[\u0000-\u001F\u007F]/g, '');
+
+  // 移除空白與常見不可見字元
+  normalized = normalized
+    .replace(/\s+/g, '')
+    .replace(/\uFEFF/g, '');
+
+  return normalized;
 }
 
 async function startBarcodeScanner() {
