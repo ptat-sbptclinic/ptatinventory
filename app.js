@@ -5,6 +5,7 @@
 let currentUser = null;
 let staffList = [];
 let allEquipmentList = [];
+let myEquipmentList = [];
 
 // ==========================================
 // 初始化
@@ -46,19 +47,9 @@ function setupEventListeners() {
   
   document.getElementById('applyFilterBtn').addEventListener('click', loadEquipmentList);
   
-  document.getElementById('filterArea').addEventListener('change', loadEquipmentList);
-  document.getElementById('filterStatus').addEventListener('change', loadEquipmentList);
-  document.getElementById('searchInput').addEventListener('input', handleSearch);
-  document.getElementById('mySearchInput').addEventListener('input', handleMySearch);
-  
-  // 掃描按鈕事件（如果存在）
-  const startScanBtn = document.getElementById('startScanBtn');
-  const stopScanBtn = document.getElementById('stopScanBtn');
-  if (startScanBtn) {
-    startScanBtn.addEventListener('click', startBarcodeScanner);
-  }
-  if (stopScanBtn) {
-    stopScanBtn.addEventListener('click', stopBarcodeScanner);
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', handleSearch);
   }
   
   const mySearchInput = document.getElementById('mySearchInput');
@@ -182,29 +173,28 @@ function showLoginView(show) {
 // ==========================================
 
 function switchView(viewName) {
-  // 移除所有視圖的 active 類別
-  document.querySelectorAll('.view').forEach(view => {
-    view.classList.remove('active');
+  const allViews = ['scanView', 'listView', 'loanView', 'myView'];
+  allViews.forEach(viewId => {
+    const view = document.getElementById(viewId);
+    if (view) {
+      view.style.display = 'none';
+    }
   });
   
-  // 移除所有標籤的 active 類別
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.remove('active');
   });
   
-  // 顯示目標視圖
   const targetView = document.getElementById(viewName + 'View');
   if (targetView) {
-    targetView.classList.add('active');
+    targetView.style.display = 'block';
   }
   
-  // 標記活動標籤
   const activeTab = document.querySelector(`[data-view="${viewName}"]`);
   if (activeTab) {
     activeTab.classList.add('active');
   }
   
-  // 載入對應資料
   switch(viewName) {
     case 'list':
       loadEquipmentList();
@@ -322,9 +312,6 @@ function handleSearch(e) {
 // 我的輔具
 // ==========================================
 
-let myEquipmentList = [];
-let currentInventoryStatus = '';
-
 function loadMyEquipment() {
   if (!currentUser) return;
   
@@ -332,58 +319,14 @@ function loadMyEquipment() {
   const countDisplay = document.getElementById('myEquipmentCount');
   listContainer.innerHTML = '<div class="loading">載入中...</div>';
   
-  // 設定盤點狀態標籤點擊事件
-  setupMyTabs();
-  
   callAPI('getEquipmentByStaff', { staffName: currentUser.name }, function(response) {
     if (response.success) {
       myEquipmentList = response.data;
       displayMyEquipmentList(response.data, listContainer, countDisplay);
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
-      showToast('載入我的輔具清單失敗', 'error');
     }
   });
-}
-
-function setupMyTabs() {
-  const tabs = document.querySelectorAll('.my-tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', function() {
-      // 移除所有 active
-      tabs.forEach(t => t.classList.remove('active'));
-      // 設定當前 active
-      this.classList.add('active');
-      
-      // 取得選擇的盤點狀態
-      currentInventoryStatus = this.dataset.inventoryStatus || '';
-      
-      // 篩選並顯示
-      filterMyEquipmentByInventoryStatus();
-    });
-  });
-}
-
-function filterMyEquipmentByInventoryStatus() {
-  const listContainer = document.getElementById('myEquipmentList');
-  const countDisplay = document.getElementById('myEquipmentCount');
-  
-  if (!currentInventoryStatus) {
-    // 顯示全部
-    displayMyEquipmentList(myEquipmentList, listContainer, countDisplay);
-  } else {
-    // 根據盤點狀態篩選
-    const filtered = myEquipmentList.filter(equipment => {
-      const inventoried = isInventoriedThisMonth(equipment.lastInventory);
-      if (currentInventoryStatus === 'inventoried') {
-        return inventoried;
-      } else if (currentInventoryStatus === 'not-inventoried') {
-        return !inventoried;
-      }
-      return true;
-    });
-    displayMyEquipmentList(filtered, listContainer, countDisplay);
-  }
 }
 
 function displayMyEquipmentList(equipmentList, container, countDisplay) {
@@ -410,7 +353,6 @@ function createMyEquipmentCard(equipment) {
   card.className = 'equipment-card';
   
   const area = getEquipmentArea(equipment);
-  const inventoried = isInventoriedThisMonth(equipment.lastInventory);
   
   card.innerHTML = `
     <div class="equipment-card-header">
@@ -418,13 +360,7 @@ function createMyEquipmentCard(equipment) {
         <div class="equipment-card-title">${equipment.equipmentName}</div>
         <div class="equipment-card-id">${equipment.propertyId}</div>
       </div>
-      <div class="header-badges">
-        <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
-        <span class="inventory-badge ${inventoried ? 'inventoried' : 'not-inventoried'}">
-          <i class="fas ${inventoried ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
-          ${inventoried ? '已盤點' : '未盤點'}
-        </span>
-      </div>
+      <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
     </div>
     <div class="equipment-card-body">
       <div class="equipment-card-row">
@@ -435,12 +371,6 @@ function createMyEquipmentCard(equipment) {
         <i class="fas fa-map-marker-alt"></i>
         <span>${area} - ${equipment.location}</span>
       </div>
-      ${equipment.lastInventory ? `
-      <div class="equipment-card-row">
-        <i class="fas fa-clock"></i>
-        <span>最後盤點：${equipment.lastInventory}</span>
-      </div>
-      ` : ''}
       ${equipment.notes ? `
       <div class="equipment-card-row">
         <i class="fas fa-comment"></i>
@@ -461,29 +391,14 @@ function createMyEquipmentCard(equipment) {
 function handleMySearch(e) {
   const searchTerm = e.target.value.trim().toLowerCase();
   
-  // 先根據盤點狀態篩選
-  let baseList = myEquipmentList;
-  if (currentInventoryStatus) {
-    baseList = myEquipmentList.filter(equipment => {
-      const inventoried = isInventoriedThisMonth(equipment.lastInventory);
-      if (currentInventoryStatus === 'inventoried') {
-        return inventoried;
-      } else if (currentInventoryStatus === 'not-inventoried') {
-        return !inventoried;
-      }
-      return true;
-    });
-  }
-  
-  // 再根據搜尋詞篩選
   if (!searchTerm) {
     const container = document.getElementById('myEquipmentList');
     const countDisplay = document.getElementById('myEquipmentCount');
-    displayMyEquipmentList(baseList, container, countDisplay);
+    displayMyEquipmentList(myEquipmentList, container, countDisplay);
     return;
   }
   
-  const filtered = baseList.filter(equipment => {
+  const filtered = myEquipmentList.filter(equipment => {
     return (equipment.propertyId && equipment.propertyId.toLowerCase().includes(searchTerm)) ||
            (equipment.inventoryId && equipment.inventoryId.toLowerCase().includes(searchTerm)) ||
            (equipment.equipmentName && equipment.equipmentName.toLowerCase().includes(searchTerm));
@@ -687,34 +602,6 @@ function getEquipmentArea(equipment) {
   return extractAreaFromLocation(equipment.location);
 }
 
-function isInventoriedThisMonth(lastInventory) {
-  if (!lastInventory) return false;
-  
-  // 解析最後盤點時間
-  let inventoryDate;
-  if (typeof lastInventory === 'string') {
-    // 嘗試解析字串格式：YYYY/M/D HH:mm:ss 或 YYYYMMDD
-    inventoryDate = new Date(lastInventory);
-  } else {
-    inventoryDate = lastInventory;
-  }
-  
-  // 檢查日期是否有效
-  if (isNaN(inventoryDate.getTime())) return false;
-  
-  // 取得當前年月
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  
-  // 取得盤點年月
-  const inventoryYear = inventoryDate.getFullYear();
-  const inventoryMonth = inventoryDate.getMonth();
-  
-  // 判斷是否為本月
-  return inventoryYear === currentYear && inventoryMonth === currentMonth;
-}
-
 function callAPI(action, params, callback) {
   // 只有非 getStaffList 的請求才顯示 loading
   const showLoader = action !== 'getStaffList';
@@ -764,144 +651,4 @@ function showToast(message, type) {
   setTimeout(() => {
     toast.className = 'toast';
   }, 3000);
-}
-
-// ==========================================
-// 條碼掃描功能
-// ==========================================
-
-let scannerStream = null;
-let scannerAnimationFrame = null;
-let isScanning = false;
-
-async function startBarcodeScanner() {
-  if (!currentUser) {
-    alert('請先登入');
-    return;
-  }
-  
-  const video = document.getElementById('scannerVideo');
-  const canvas = document.getElementById('scannerCanvas');
-  const container = document.getElementById('scannerContainer');
-  const startBtn = document.getElementById('startScanBtn');
-  const stopBtn = document.getElementById('stopScanBtn');
-  const resultDiv = document.getElementById('scanResult');
-  
-  try {
-    // 請求相機權限
-    scannerStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' } // 使用後置相機
-    });
-    
-    video.srcObject = scannerStream;
-    container.style.display = 'block';
-    startBtn.style.display = 'none';
-    stopBtn.style.display = 'inline-block';
-    resultDiv.style.display = 'none';
-    
-    isScanning = true;
-    
-    // 開始掃描條碼
-    scanBarcode(video, canvas);
-    
-  } catch (error) {
-    console.error('相機啟動失敗:', error);
-    alert('無法啟動相機，請確認已授予相機權限');
-  }
-}
-
-function stopBarcodeScanner() {
-  const video = document.getElementById('scannerVideo');
-  const container = document.getElementById('scannerContainer');
-  const startBtn = document.getElementById('startScanBtn');
-  const stopBtn = document.getElementById('stopScanBtn');
-  
-  isScanning = false;
-  
-  if (scannerStream) {
-    scannerStream.getTracks().forEach(track => track.stop());
-    scannerStream = null;
-  }
-  
-  if (scannerAnimationFrame) {
-    cancelAnimationFrame(scannerAnimationFrame);
-    scannerAnimationFrame = null;
-  }
-  
-  video.srcObject = null;
-  container.style.display = 'none';
-  startBtn.style.display = 'inline-block';
-  stopBtn.style.display = 'none';
-}
-
-function scanBarcode(video, canvas) {
-  if (!isScanning) return;
-  
-  const context = canvas.getContext('2d');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  
-  if (canvas.width > 0 && canvas.height > 0) {
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // 使用 ZXing 或其他條碼庫解析
-    // 這裡先使用簡化版本：手動輸入條碼
-    // 實際使用時需要整合條碼掃描庫
-    
-    // 暫時使用 prompt 模擬掃描結果
-    // TODO: 整合真正的條碼掃描庫
-  }
-  
-  scannerAnimationFrame = requestAnimationFrame(() => scanBarcode(video, canvas));
-}
-
-function handleBarcodeDetected(barcode) {
-  if (!isScanning) return;
-  
-  isScanning = false;
-  stopBarcodeScanner();
-  
-  const resultDiv = document.getElementById('scanResult');
-  resultDiv.innerHTML = `
-    <p><strong>掃描到條碼：</strong>${barcode}</p>
-    <p>正在處理盤點...</p>
-  `;
-  resultDiv.style.display = 'block';
-  
-  // 執行快速盤點
-  callAPI('quickInventory', {
-    propertyId: barcode,
-    staffName: currentUser.name,
-    photoData: '',
-    newLocation: '',
-    newCurrentStatus: ''
-  }, function(response) {
-    if (response.success) {
-      resultDiv.innerHTML = `
-        <p style="color: #059669;"><i class="fas fa-check-circle"></i> 盤點成功！</p>
-        <p><strong>財產編號：</strong>${barcode}</p>
-        <button class="btn btn-primary" onclick="location.reload()">
-          <i class="fas fa-redo"></i> 繼續掃描
-        </button>
-      `;
-      showToast('盤點成功！', 'success');
-    } else {
-      resultDiv.innerHTML = `
-        <p style="color: #DC2626;"><i class="fas fa-times-circle"></i> 盤點失敗</p>
-        <p>${response.message}</p>
-        <button class="btn btn-primary" onclick="location.reload()">
-          <i class="fas fa-redo"></i> 重試
-        </button>
-      `;
-      showToast('盤點失敗：' + response.message, 'error');
-    }
-  });
-}
-
-// 暫時的手動輸入功能（用於測試）
-window.testScan = function() {
-  const barcode = prompt('請輸入財產編號（測試用）：');
-  if (barcode) {
-    handleBarcodeDetected(barcode);
-  }
 }
