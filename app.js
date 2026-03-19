@@ -73,6 +73,11 @@ function setupEventListeners() {
   if (stopScanBtn) {
     stopScanBtn.addEventListener('click', stopBarcodeScanner);
   }
+
+  const generateMonthlyReportBtn = document.getElementById('generateMonthlyReportBtn');
+  if (generateMonthlyReportBtn) {
+    generateMonthlyReportBtn.addEventListener('click', handleGenerateMonthlyReport);
+  }
 }
 
 // ==========================================
@@ -194,7 +199,7 @@ function switchView(viewName) {
     stopBarcodeScanner();
   }
 
-  const allViews = ['scanView', 'listView', 'loanView', 'myView'];
+  const allViews = ['scanView', 'listView', 'loanView', 'reportView', 'myView'];
   allViews.forEach(viewId => {
     const view = document.getElementById(viewId);
     if (view) {
@@ -225,6 +230,9 @@ function switchView(viewName) {
       break;
     case 'loan':
       loadLoanList();
+      break;
+    case 'report':
+      initializeReportView();
       break;
   }
 }
@@ -473,6 +481,74 @@ function handleMySearch(e) {
   const container = document.getElementById('myEquipmentList');
   const countDisplay = document.getElementById('myEquipmentCount');
   displayMyEquipmentList(filtered, container, countDisplay);
+}
+
+// ==========================================
+// 月報表
+// ==========================================
+
+function initializeReportView() {
+  const monthInput = document.getElementById('reportMonth');
+  if (monthInput && !monthInput.value) {
+    monthInput.value = getDefaultReportMonth();
+  }
+}
+
+function getDefaultReportMonth() {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function handleGenerateMonthlyReport() {
+  const area = document.getElementById('reportArea').value;
+  const month = document.getElementById('reportMonth').value;
+
+  if (!month) {
+    showToast('請先選擇報表月份', 'error');
+    return;
+  }
+
+  callAPI('generateMonthlyMaintenanceReport', {
+    area: area,
+    month: month
+  }, function(response) {
+    if (!response.success || !response.data) {
+      hideReportResult();
+      showToast(response.message || '月報表產生失敗', 'error');
+      return;
+    }
+
+    displayReportResult(response.data, area, month);
+    showToast('月報表已產生', 'success');
+  });
+}
+
+function displayReportResult(data, area, month) {
+  const reportResult = document.getElementById('reportResult');
+  const reportResultText = document.getElementById('reportResultText');
+  const reportOpenLink = document.getElementById('reportOpenLink');
+  const reportDownloadLink = document.getElementById('reportDownloadLink');
+
+  if (!reportResult || !reportResultText || !reportOpenLink || !reportDownloadLink) {
+    return;
+  }
+
+  const areaText = area || '全部區域';
+  reportResult.style.display = 'block';
+  reportResultText.textContent = `${areaText} ${month} 月報表已建立，共 ${data.rowCount || 0} 筆`;
+  reportOpenLink.href = data.url || '#';
+  reportDownloadLink.href = data.downloadUrl || data.url || '#';
+  reportDownloadLink.setAttribute('download', data.fileName || 'monthly-report.pdf');
+}
+
+function hideReportResult() {
+  const reportResult = document.getElementById('reportResult');
+  if (reportResult) {
+    reportResult.style.display = 'none';
+  }
 }
 
 function isInventoriedThisMonth(lastInventory) {
@@ -896,7 +972,7 @@ function callAPI(action, params, callback) {
 }
 
 function showLoading(show) {
-  const loader = document.getElementById('loader');
+  const loader = document.getElementById('loader') || document.getElementById('loadingOverlay');
   if (loader) {
     loader.style.display = show ? 'flex' : 'none';
   }
