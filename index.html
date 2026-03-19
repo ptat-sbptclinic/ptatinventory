@@ -40,6 +40,9 @@
         <button class="nav-tab" data-view="loan">
           <i class="fas fa-handshake"></i> 外借管理
         </button>
+        <button class="nav-tab" data-view="report">
+          <i class="fas fa-file-pdf"></i> 月報表
+        </button>
         <button class="nav-tab" data-view="my">
           <i class="fas fa-user"></i> 我的輔具
         </button>
@@ -166,6 +169,53 @@
           
           <div id="loanList" class="loan-list">
             <div class="loading">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 月報表頁面 -->
+      <div id="reportView" class="view">
+        <div class="container">
+          <h2><i class="fas fa-file-pdf"></i> 維護紀錄月報表</h2>
+          <p class="subtitle">依區域與月份產出展示輔具維護清冊 PDF</p>
+
+          <div class="report-panel">
+            <div class="filter-section">
+              <div class="filter-group">
+                <label for="reportArea">區域</label>
+                <select id="reportArea" class="form-control">
+                  <option value="">全部區域</option>
+                  <option value="屏中區">屏中區</option>
+                  <option value="屏北區">屏北區</option>
+                </select>
+              </div>
+
+              <div class="filter-group">
+                <label for="reportMonth">月份</label>
+                <input type="month" id="reportMonth" class="form-control">
+              </div>
+            </div>
+
+            <div class="report-actions">
+              <button id="generateMonthlyReportBtn" class="btn btn-primary">
+                <i class="fas fa-file-export"></i> 產生 PDF
+              </button>
+            </div>
+
+            <div id="reportResult" class="report-result" style="display: none;">
+              <div class="report-result-header">
+                <i class="fas fa-circle-check"></i>
+                <span id="reportResultText">月報表已產生</span>
+              </div>
+              <div class="report-result-actions">
+                <a id="reportOpenLink" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">
+                  <i class="fas fa-up-right-from-square"></i> 開啟 PDF
+                </a>
+                <a id="reportDownloadLink" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">
+                  <i class="fas fa-download"></i> 下載 PDF
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
