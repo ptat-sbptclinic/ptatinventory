@@ -827,8 +827,29 @@ textarea.form-control {
 
 .loan-toolbar {
   display: flex;
+  gap: 0.75rem;
   justify-content: flex-end;
   margin-bottom: 1rem;
+}
+
+.loan-manual-entry {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.loan-manual-entry .form-control {
+  flex: 1;
+}
+
+.equipment-card.clickable-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.equipment-card.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .loan-card {
@@ -1034,6 +1055,12 @@ textarea.form-control {
   justify-content: space-between;
 }
 
+.signature-hint {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--gray-600);
+}
+
 #photoVideo, #photoPreview {
   width: 100%;
   border-radius: 8px;
@@ -1154,6 +1181,14 @@ textarea.form-control {
   }
 
   .loan-toolbar .btn {
+    width: 100%;
+  }
+
+  .loan-manual-entry {
+    flex-direction: column;
+  }
+
+  .loan-manual-entry .btn {
     width: 100%;
   }
 

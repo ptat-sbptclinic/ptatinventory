@@ -6,6 +6,7 @@ const signaturePads = {};
 
 document.addEventListener('DOMContentLoaded', function() {
   initializeSignaturePad('loanSignatureCanvas', 'clearLoanSignatureBtn');
+  initializeSignaturePad('returnSignatureCanvas', 'clearReturnSignatureBtn');
 });
 
 function initializeSignaturePad(canvasId, clearButtonId) {

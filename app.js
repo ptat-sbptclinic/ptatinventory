@@ -17,6 +17,12 @@ let isProcessingLoanScan = false;
 let lastLoanScannedCode = '';
 let currentLoanEquipment = null;
 let currentLoanDraft = null;
+let returnQrCode = null;
+let isReturnScannerRunning = false;
+let isProcessingReturnScan = false;
+let lastReturnScannedCode = '';
+let currentReturnLoan = null;
+let currentReturnDraft = null;
 
 // ==========================================
 // 初始化
@@ -90,6 +96,13 @@ function setupEventListeners() {
     openLoanWorkflowBtn.addEventListener('click', openLoanWorkflow);
   }
 
+  const openReturnWorkflowBtn = document.getElementById('openReturnWorkflowBtn');
+  if (openReturnWorkflowBtn) {
+    openReturnWorkflowBtn.addEventListener('click', function() {
+      openReturnWorkflow();
+    });
+  }
+
   const closeLoanWorkflowBtn = document.getElementById('closeLoanWorkflowBtn');
   if (closeLoanWorkflowBtn) {
     closeLoanWorkflowBtn.addEventListener('click', closeLoanWorkflow);
@@ -107,6 +120,18 @@ function setupEventListeners() {
   const startLoanScanBtn = document.getElementById('startLoanScanBtn');
   if (startLoanScanBtn) {
     startLoanScanBtn.addEventListener('click', startLoanBarcodeScanner);
+  }
+
+  const searchLoanPropertyBtn = document.getElementById('searchLoanPropertyBtn');
+  if (searchLoanPropertyBtn) {
+    searchLoanPropertyBtn.addEventListener('click', function() {
+      const propertyId = normalizeScannedCode(document.getElementById('loanManualPropertyId').value);
+      if (!propertyId) {
+        showToast('請輸入財產編號', 'error');
+        return;
+      }
+      handleLoanBarcodeDetected(propertyId);
+    });
   }
 
   const stopLoanScanBtn = document.getElementById('stopLoanScanBtn');
@@ -137,6 +162,67 @@ function setupEventListeners() {
   const submitLoanBtn = document.getElementById('submitLoanBtn');
   if (submitLoanBtn) {
     submitLoanBtn.addEventListener('click', handleCreateLoan);
+  }
+
+  const closeReturnWorkflowBtn = document.getElementById('closeReturnWorkflowBtn');
+  if (closeReturnWorkflowBtn) {
+    closeReturnWorkflowBtn.addEventListener('click', closeReturnWorkflow);
+  }
+
+  const returnModal = document.getElementById('returnModal');
+  if (returnModal) {
+    returnModal.addEventListener('click', function(event) {
+      if (event.target === returnModal) {
+        closeReturnWorkflow();
+      }
+    });
+  }
+
+  const startReturnScanBtn = document.getElementById('startReturnScanBtn');
+  if (startReturnScanBtn) {
+    startReturnScanBtn.addEventListener('click', startReturnBarcodeScanner);
+  }
+
+  const stopReturnScanBtn = document.getElementById('stopReturnScanBtn');
+  if (stopReturnScanBtn) {
+    stopReturnScanBtn.addEventListener('click', stopReturnBarcodeScanner);
+  }
+
+  const searchReturnPropertyBtn = document.getElementById('searchReturnPropertyBtn');
+  if (searchReturnPropertyBtn) {
+    searchReturnPropertyBtn.addEventListener('click', function() {
+      const propertyId = normalizeScannedCode(document.getElementById('returnManualPropertyId').value);
+      if (!propertyId) {
+        showToast('請輸入財產編號', 'error');
+        return;
+      }
+      lookupReturnLoanByProperty(propertyId);
+    });
+  }
+
+  const returnBackToLookupBtn = document.getElementById('returnBackToLookupBtn');
+  if (returnBackToLookupBtn) {
+    returnBackToLookupBtn.addEventListener('click', function() {
+      setReturnWorkflowStep('lookup');
+      startReturnBarcodeScanner();
+    });
+  }
+
+  const returnContinueToSignatureBtn = document.getElementById('returnContinueToSignatureBtn');
+  if (returnContinueToSignatureBtn) {
+    returnContinueToSignatureBtn.addEventListener('click', handleReturnFormContinue);
+  }
+
+  const returnBackToFormBtn = document.getElementById('returnBackToFormBtn');
+  if (returnBackToFormBtn) {
+    returnBackToFormBtn.addEventListener('click', function() {
+      setReturnWorkflowStep('form');
+    });
+  }
+
+  const submitReturnBtn = document.getElementById('submitReturnBtn');
+  if (submitReturnBtn) {
+    submitReturnBtn.addEventListener('click', handleReturnLoanSubmit);
   }
 }
 
@@ -214,6 +300,7 @@ function handleLogin() {
 
 function handleLogout() {
   closeLoanWorkflow();
+  closeReturnWorkflow();
   currentUser = null;
   localStorage.removeItem('currentUser');
   showLoginView(true);
@@ -258,6 +345,11 @@ function showLoginView(show) {
 function switchView(viewName) {
   if (viewName !== 'scan') {
     stopBarcodeScanner();
+  }
+
+  if (viewName !== 'loan') {
+    stopLoanBarcodeScanner();
+    stopReturnBarcodeScanner();
   }
 
   const allViews = ['scanView', 'listView', 'loanView', 'reportView', 'myView'];
@@ -759,7 +851,7 @@ function displayLoanList(loanList, container, countDisplay) {
 
 function createLoanCard(equipment) {
   const card = document.createElement('div');
-  card.className = 'equipment-card';
+  card.className = 'equipment-card clickable-card';
   
   const area = getEquipmentArea(equipment);
   
@@ -791,7 +883,16 @@ function createLoanCard(equipment) {
       </div>
       ` : ''}
     </div>
+    <div class="equipment-card-footer">
+      <button class="btn btn-secondary btn-small" type="button">
+        <i class="fas fa-rotate-left"></i> 進行歸還
+      </button>
+    </div>
   `;
+
+  card.addEventListener('click', function() {
+    openReturnWorkflow(equipment.propertyId);
+  });
   
   return card;
 }
@@ -835,6 +936,7 @@ function resetLoanWorkflow() {
   }
 
   const borrowerInput = document.getElementById('loanBorrower');
+  const manualPropertyInput = document.getElementById('loanManualPropertyId');
   const startDateInput = document.getElementById('loanStartDate');
   const returnDateInput = document.getElementById('loanExpectedReturnDate');
   const purposeInput = document.getElementById('loanPurpose');
@@ -843,6 +945,7 @@ function resetLoanWorkflow() {
   const signatureSummary = document.getElementById('loanSignatureSummary');
 
   if (borrowerInput) borrowerInput.value = '';
+  if (manualPropertyInput) manualPropertyInput.value = '';
   if (startDateInput) startDateInput.value = getTodayDateString();
   if (returnDateInput) returnDateInput.value = '';
   if (purposeInput) purposeInput.value = '';
@@ -1142,6 +1245,343 @@ function handleCreateLoan() {
       showToast(response.message || '外借建立失敗', 'error');
     }
   });
+}
+
+function openReturnWorkflow(propertyId) {
+  if (!currentUser) {
+    showToast('請先登入', 'error');
+    return;
+  }
+
+  resetReturnWorkflow();
+
+  const modal = document.getElementById('returnModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+
+  if (propertyId) {
+    const manualInput = document.getElementById('returnManualPropertyId');
+    if (manualInput) {
+      manualInput.value = propertyId;
+    }
+    lookupReturnLoanByProperty(propertyId);
+    return;
+  }
+
+  startReturnBarcodeScanner();
+}
+
+function closeReturnWorkflow() {
+  const modal = document.getElementById('returnModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+
+  stopReturnBarcodeScanner();
+  resetReturnWorkflow();
+}
+
+function resetReturnWorkflow() {
+  currentReturnLoan = null;
+  currentReturnDraft = null;
+  isProcessingReturnScan = false;
+  lastReturnScannedCode = '';
+
+  const manualPropertyInput = document.getElementById('returnManualPropertyId');
+  const actualDateInput = document.getElementById('returnActualDate');
+  const lookupResult = document.getElementById('returnLookupResult');
+  const loanSummary = document.getElementById('returnLoanSummary');
+  const signatureSummary = document.getElementById('returnSignatureSummary');
+
+  if (manualPropertyInput) manualPropertyInput.value = '';
+  if (actualDateInput) actualDateInput.value = getTodayDateString();
+  if (lookupResult) {
+    lookupResult.style.display = 'none';
+    lookupResult.innerHTML = '';
+  }
+  if (loanSummary) loanSummary.innerHTML = '';
+  if (signatureSummary) signatureSummary.innerHTML = '';
+
+  if (typeof clearSignature === 'function') {
+    clearSignature('returnSignatureCanvas');
+  }
+
+  setReturnWorkflowStep('lookup');
+}
+
+function setReturnWorkflowStep(step) {
+  const stepMap = {
+    lookup: 'returnLookupStep',
+    form: 'returnFormStep',
+    signature: 'returnSignatureStep'
+  };
+
+  Object.keys(stepMap).forEach(key => {
+    const panel = document.getElementById(stepMap[key]);
+    const indicator = document.getElementById('returnStep' + capitalizeFirstLetter(key) + 'Indicator');
+    if (panel) {
+      panel.classList.toggle('active', key === step);
+    }
+    if (indicator) {
+      indicator.classList.toggle('active', key === step);
+    }
+  });
+
+  if (step !== 'lookup') {
+    stopReturnBarcodeScanner();
+  }
+
+  if (step === 'signature' && typeof initializeSignaturePad === 'function') {
+    initializeSignaturePad('returnSignatureCanvas', 'clearReturnSignatureBtn');
+  }
+}
+
+async function startReturnBarcodeScanner() {
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('掃描元件未載入，請重新整理頁面', 'error');
+    return;
+  }
+
+  if (isReturnScannerRunning) {
+    return;
+  }
+
+  const container = document.getElementById('returnScannerContainer');
+  const startBtn = document.getElementById('startReturnScanBtn');
+  const stopBtn = document.getElementById('stopReturnScanBtn');
+  const resultDiv = document.getElementById('returnLookupResult');
+
+  if (!container || !startBtn || !stopBtn) {
+    showToast('歸還掃描介面初始化失敗', 'error');
+    return;
+  }
+
+  if (!returnQrCode) {
+    returnQrCode = new Html5Qrcode('returnQrReader');
+  }
+
+  setReturnWorkflowStep('lookup');
+  container.style.display = 'block';
+  startBtn.style.display = 'inline-flex';
+  stopBtn.style.display = 'inline-flex';
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+
+  const scanConfig = {
+    fps: 10,
+    qrbox: { width: 260, height: 120 },
+    aspectRatio: 1.777,
+    rememberLastUsedCamera: true
+  };
+
+  try {
+    await returnQrCode.start(
+      { facingMode: { exact: 'environment' } },
+      scanConfig,
+      onReturnScanSuccess,
+      () => {}
+    );
+    isReturnScannerRunning = true;
+    if (startBtn) startBtn.style.display = 'none';
+  } catch (exactError) {
+    try {
+      await returnQrCode.start(
+        { facingMode: 'environment' },
+        scanConfig,
+        onReturnScanSuccess,
+        () => {}
+      );
+      isReturnScannerRunning = true;
+      if (startBtn) startBtn.style.display = 'none';
+    } catch (error) {
+      console.error('啟動歸還掃描失敗:', error);
+      showToast('無法啟動相機掃描，請確認相機權限', 'error');
+      stopReturnBarcodeScanner();
+    }
+  }
+}
+
+async function stopReturnBarcodeScanner() {
+  const container = document.getElementById('returnScannerContainer');
+  const startBtn = document.getElementById('startReturnScanBtn');
+  const stopBtn = document.getElementById('stopReturnScanBtn');
+
+  if (returnQrCode && isReturnScannerRunning) {
+    try {
+      await returnQrCode.stop();
+      await returnQrCode.clear();
+    } catch (error) {
+      console.warn('停止歸還掃描時發生錯誤:', error);
+    }
+  }
+
+  isReturnScannerRunning = false;
+  isProcessingReturnScan = false;
+  lastReturnScannedCode = '';
+
+  if (container) container.style.display = 'none';
+  if (startBtn) startBtn.style.display = 'inline-flex';
+  if (stopBtn) stopBtn.style.display = 'none';
+}
+
+function onReturnScanSuccess(decodedText) {
+  const barcode = normalizeScannedCode(decodedText);
+  if (!barcode) return;
+  if (isProcessingReturnScan) return;
+  if (barcode === lastReturnScannedCode) return;
+
+  isProcessingReturnScan = true;
+  lastReturnScannedCode = barcode;
+  lookupReturnLoanByProperty(barcode);
+}
+
+function lookupReturnLoanByProperty(propertyId) {
+  const resultDiv = document.getElementById('returnLookupResult');
+  const normalizedPropertyId = normalizeScannedCode(propertyId);
+
+  if (!normalizedPropertyId) {
+    showToast('請輸入財產編號', 'error');
+    return;
+  }
+
+  if (resultDiv) {
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+      <p><strong>查詢財產編號：</strong>${normalizedPropertyId}</p>
+      <p>正在查詢外借資料...</p>
+    `;
+  }
+
+  callAPI('getActiveLoanByPropertyId', { propertyId: normalizedPropertyId }, function(response) {
+    isProcessingReturnScan = false;
+
+    if (!response.success || !response.data) {
+      lastReturnScannedCode = '';
+      if (resultDiv) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <p style="color: #DC2626;"><i class="fas fa-times-circle"></i> 找不到外借中的資料</p>
+          <p>${response.message || '請確認財產編號是否正確'}</p>
+        `;
+      }
+      showToast(response.message || '查無外借資料', 'error');
+      return;
+    }
+
+    currentReturnLoan = response.data;
+    renderReturnLoanSummary();
+    setReturnWorkflowStep('form');
+  });
+}
+
+function renderReturnLoanSummary() {
+  if (!currentReturnLoan) return;
+
+  const summaryHtml = `
+    <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentReturnLoan.equipmentName} (${currentReturnLoan.propertyId})</span></div>
+    <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnLoan.borrower || '-'}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用起始日</strong><span>${formatDisplayDate(currentReturnLoan.loanDate)}</span></div>
+    <div class="loan-signature-summary-item"><strong>預計歸還日</strong><span>${formatDisplayDate(currentReturnLoan.expectedReturnDate)}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnLoan.purpose || '-'}</span></div>
+  `;
+
+  const loanSummary = document.getElementById('returnLoanSummary');
+  const signatureSummary = document.getElementById('returnSignatureSummary');
+  if (loanSummary) loanSummary.innerHTML = summaryHtml;
+
+  if (signatureSummary && currentReturnDraft) {
+    signatureSummary.innerHTML = summaryHtml + `
+      <div class="loan-signature-summary-item"><strong>實際歸還日</strong><span>${currentReturnDraft.actualReturnDate}</span></div>
+      <div class="loan-signature-summary-item"><strong>中心人員</strong><span>${currentUser ? currentUser.name : '-'}</span></div>
+    `;
+  }
+}
+
+function handleReturnFormContinue() {
+  if (!currentReturnLoan) {
+    showToast('請先查詢外借資料', 'error');
+    setReturnWorkflowStep('lookup');
+    return;
+  }
+
+  const actualReturnDate = document.getElementById('returnActualDate').value;
+  const loanDate = normalizeDateString(currentReturnLoan.loanDate);
+
+  if (!actualReturnDate) {
+    showToast('請填寫實際歸還日期', 'error');
+    return;
+  }
+
+  if (loanDate && actualReturnDate < loanDate) {
+    showToast('實際歸還日期不能早於借出日期', 'error');
+    return;
+  }
+
+  currentReturnDraft = {
+    actualReturnDate: actualReturnDate
+  };
+
+  renderReturnLoanSummary();
+  if (typeof clearSignature === 'function') {
+    clearSignature('returnSignatureCanvas');
+  }
+  setReturnWorkflowStep('signature');
+}
+
+function handleReturnLoanSubmit() {
+  if (!currentReturnLoan || !currentReturnDraft) {
+    showToast('請先完成歸還資料填寫', 'error');
+    return;
+  }
+
+  let signatureData = '';
+  if (typeof getSignatureData === 'function') {
+    signatureData = getSignatureData('returnSignatureCanvas');
+  }
+
+  if (!signatureData) {
+    showToast('請先完成中心人員簽名', 'error');
+    return;
+  }
+
+  callAPI('returnLoan', {
+    loanId: currentReturnLoan.loanId,
+    actualReturnDate: currentReturnDraft.actualReturnDate,
+    staffName: currentUser.name,
+    signatureData: signatureData
+  }, function(response) {
+    if (response.success) {
+      showToast('歸還完成', 'success');
+      closeReturnWorkflow();
+      loadLoanList();
+      loadMyEquipment();
+    } else {
+      showToast(response.message || '歸還失敗', 'error');
+    }
+  });
+}
+
+function formatDisplayDate(value) {
+  if (!value) return '-';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    return String(value);
+  }
+  const date = new Date(value);
+  if (isNaN(date.getTime())) {
+    return String(value);
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeDateString(value) {
+  const text = formatDisplayDate(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
 }
 
 // ==========================================

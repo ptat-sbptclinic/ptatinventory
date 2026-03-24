@@ -161,6 +161,9 @@
             <button id="openLoanWorkflowBtn" class="btn btn-primary">
               <i class="fas fa-right-left"></i> 進行外借
             </button>
+            <button id="openReturnWorkflowBtn" class="btn btn-secondary">
+              <i class="fas fa-rotate-left"></i> 輔具歸還
+            </button>
           </div>
           
           <div class="loan-tabs">
@@ -308,7 +311,14 @@
 
           <section id="loanScanStep" class="loan-step-panel active">
             <div class="scan-instructions loan-scan-instructions">
-              <p><i class="fas fa-camera"></i> 請用相機掃描輔具條碼，系統會帶出外借資料頁面</p>
+              <p><i class="fas fa-camera"></i> 可用相機掃描或直接輸入財產編號，不需拍照</p>
+            </div>
+
+            <div class="loan-manual-entry">
+              <input type="text" id="loanManualPropertyId" class="form-control" placeholder="輸入財產編號，例如 AA123456">
+              <button id="searchLoanPropertyBtn" class="btn btn-secondary" type="button">
+                <i class="fas fa-magnifying-glass"></i> 查詢財編
+              </button>
             </div>
 
             <div id="loanScannerContainer" class="scanner-container" style="display: none;">
@@ -367,6 +377,7 @@
 
             <div class="form-group">
               <label>請於下方手寫簽名 *</label>
+              <p class="signature-hint">此處為借用人 / 單位簽名，用於確認外借責任。</p>
               <canvas id="loanSignatureCanvas" class="signature-canvas"></canvas>
               <button id="clearLoanSignatureBtn" class="btn btn-secondary btn-sm" type="button">
                 <i class="fas fa-eraser"></i> 清除重簽
@@ -377,6 +388,96 @@
               <button id="loanBackToFormBtn" class="btn btn-secondary">返回資料</button>
               <button id="submitLoanBtn" class="btn btn-primary">
                 <i class="fas fa-check"></i> 完成外借
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 歸還 Modal -->
+    <div id="returnModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-rotate-left"></i> 歸還流程</h3>
+          <button id="closeReturnWorkflowBtn" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="loan-stepper">
+            <div id="returnStepLookupIndicator" class="loan-step-chip active">
+              <span>1</span>
+              <strong>查詢外借</strong>
+            </div>
+            <div id="returnStepFormIndicator" class="loan-step-chip">
+              <span>2</span>
+              <strong>確認歸還</strong>
+            </div>
+            <div id="returnStepSignatureIndicator" class="loan-step-chip">
+              <span>3</span>
+              <strong>中心簽名</strong>
+            </div>
+          </div>
+
+          <section id="returnLookupStep" class="loan-step-panel active">
+            <div class="scan-instructions loan-scan-instructions">
+              <p><i class="fas fa-circle-info"></i> 可拍照掃描或輸入財產編號查詢外借資料；也可從下方外借清單直接點入。</p>
+            </div>
+
+            <div class="loan-manual-entry">
+              <input type="text" id="returnManualPropertyId" class="form-control" placeholder="輸入財產編號，例如 AA123456">
+              <button id="searchReturnPropertyBtn" class="btn btn-secondary" type="button">
+                <i class="fas fa-magnifying-glass"></i> 查詢財編
+              </button>
+            </div>
+
+            <div id="returnScannerContainer" class="scanner-container" style="display: none;">
+              <div id="returnQrReader"></div>
+            </div>
+
+            <div class="scan-controls">
+              <button id="startReturnScanBtn" class="btn btn-primary">
+                <i class="fas fa-camera"></i> 開始掃描
+              </button>
+              <button id="stopReturnScanBtn" class="btn btn-secondary" style="display: none;">
+                <i class="fas fa-stop"></i> 停止掃描
+              </button>
+            </div>
+
+            <div id="returnLookupResult" class="scan-result" style="display: none;"></div>
+          </section>
+
+          <section id="returnFormStep" class="loan-step-panel">
+            <div id="returnLoanSummary" class="loan-signature-summary"></div>
+
+            <div class="form-group">
+              <label for="returnActualDate">實際歸還日期 *</label>
+              <input type="date" id="returnActualDate" class="form-control" required>
+            </div>
+
+            <div class="button-group loan-flow-actions">
+              <button id="returnBackToLookupBtn" class="btn btn-secondary">返回查詢</button>
+              <button id="returnContinueToSignatureBtn" class="btn btn-primary">
+                <i class="fas fa-arrow-right"></i> 前往簽名
+              </button>
+            </div>
+          </section>
+
+          <section id="returnSignatureStep" class="loan-step-panel">
+            <div id="returnSignatureSummary" class="loan-signature-summary"></div>
+
+            <div class="form-group">
+              <label>請由中心人員於下方手寫簽名 *</label>
+              <p class="signature-hint">此處為中心人員簽名，用於確認歸還責任，與借用人 / 單位簽名分開保存。</p>
+              <canvas id="returnSignatureCanvas" class="signature-canvas"></canvas>
+              <button id="clearReturnSignatureBtn" class="btn btn-secondary btn-sm" type="button">
+                <i class="fas fa-eraser"></i> 清除重簽
+              </button>
+            </div>
+
+            <div class="button-group loan-flow-actions">
+              <button id="returnBackToFormBtn" class="btn btn-secondary">返回資料</button>
+              <button id="submitReturnBtn" class="btn btn-primary">
+                <i class="fas fa-check"></i> 完成歸還
               </button>
             </div>
           </section>
