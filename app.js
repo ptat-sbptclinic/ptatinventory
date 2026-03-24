@@ -478,7 +478,7 @@ function createEquipmentCard(equipment) {
   card.className = 'equipment-card clickable-card';
   
   const area = getEquipmentArea(equipment);
-  const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
+  const isInventoried = hasInventoryActivityThisMonth(equipment);
   const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
   const inventoryText = isInventoried ? '已盤點' : '未盤點';
   
@@ -599,7 +599,7 @@ function filterMyEquipmentList(searchTerm = '') {
 
   if (currentInventoryStatus) {
     filteredList = filteredList.filter(equipment => {
-      const inventoried = isInventoriedThisMonth(equipment.lastInventory);
+      const inventoried = hasInventoryActivityThisMonth(equipment);
       if (currentInventoryStatus === 'inventoried') {
         return inventoried;
       }
@@ -645,7 +645,7 @@ function createMyEquipmentCard(equipment) {
   card.className = 'equipment-card clickable-card my-equipment-card-clickable';
   
   const area = getEquipmentArea(equipment);
-  const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
+  const isInventoried = hasInventoryActivityThisMonth(equipment);
   const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
   const inventoryText = isInventoried ? '已盤點' : '未盤點';
   
@@ -934,23 +934,39 @@ function hideReportResult() {
   }
 }
 
-function isInventoriedThisMonth(lastInventory) {
-  if (!lastInventory) return false;
+function hasInventoryActivityThisMonth(equipment) {
+  if (!equipment) return false;
 
-  let inventoryDate;
-  if (typeof lastInventory === 'string') {
-    inventoryDate = new Date(lastInventory);
-  } else {
-    inventoryDate = lastInventory;
-  }
+  const activityDates = [equipment.lastInventory, equipment.updatedAt]
+    .map(parsePossibleDate)
+    .filter(function(date) {
+      return date && !isNaN(date.getTime());
+    });
 
-  if (!inventoryDate || isNaN(inventoryDate.getTime())) {
+  if (activityDates.length === 0) {
     return false;
   }
 
   const now = new Date();
-  return inventoryDate.getFullYear() === now.getFullYear() &&
-         inventoryDate.getMonth() === now.getMonth();
+  return activityDates.some(function(date) {
+    return date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth();
+  });
+}
+
+function parsePossibleDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value;
+  }
+
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  const fallback = new Date(String(value).replace(/-/g, '/'));
+  return isNaN(fallback.getTime()) ? null : fallback;
 }
 
 window.quickInventory = function(propertyId) {
@@ -1000,6 +1016,7 @@ function mergeInventoryResponseIntoEquipment(equipment, responseData) {
   merged.lastInventory = responseData.inventoryDate || merged.lastInventory;
   merged.location = responseData.newLocation || merged.location;
   merged.currentStatus = responseData.newCurrentStatus || responseData.oldCurrentStatus || merged.currentStatus;
+  merged.updatedAt = responseData.inventoryDate || responseData.updatedAt || merged.updatedAt;
   return merged;
 }
 

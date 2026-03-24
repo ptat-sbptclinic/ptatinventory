@@ -910,7 +910,8 @@ function createEquipmentObject(row) {
     notes: row[EQUIPMENT_COLS.NOTES],
     photoUrl: row[EQUIPMENT_COLS.PHOTO_URL],
     marketPrice: row[EQUIPMENT_COLS.MARKET_PRICE],
-    purchasePrice: row[EQUIPMENT_COLS.PURCHASE_PRICE]
+    purchasePrice: row[EQUIPMENT_COLS.PURCHASE_PRICE],
+    updatedAt: row[EQUIPMENT_COLS.UPDATED_AT]
   };
 }
 
