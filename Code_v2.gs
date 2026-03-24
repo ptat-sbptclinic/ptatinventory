@@ -725,7 +725,7 @@ function handleGenerateMonthlyLoanReport(e) {
     .getBlob()
     .getAs(MimeType.PDF)
     .setName(fileName + '.pdf');
-  const folder = getOrCreateFolder('月報表PDF');
+  const folder = getOrCreateReportFolder();
   const pdfFile = folder.createFile(pdfBlob);
   pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
@@ -862,7 +862,7 @@ function handleGenerateMonthlyMaintenanceReport(e) {
     .getBlob()
     .getAs(MimeType.PDF)
     .setName(fileName + '.pdf');
-  const folder = getOrCreateFolder('月報表PDF');
+  const folder = getOrCreateReportFolder();
   const pdfFile = folder.createFile(pdfBlob);
   pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
@@ -1374,6 +1374,10 @@ function getOrCreateNestedFolder(folderNames) {
   }
 
   return currentFolder;
+}
+
+function getOrCreateReportFolder() {
+  return getOrCreateNestedFolder(['輔具盤點系統', '月報表PDF']);
 }
 
 function createResponse(success, message, data = null) {
