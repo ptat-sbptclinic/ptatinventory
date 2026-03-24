@@ -2,7 +2,7 @@
 // Service Worker - PWA 離線支援
 // ==========================================
 
-const CACHE_NAME = 'ptat-inventory-v2';
+const CACHE_NAME = 'ptat-inventory-v3';
 const BASE_PATH = '/ptatinventory';
 const urlsToCache = [
   '/',
@@ -10,10 +10,11 @@ const urlsToCache = [
   '/styles.css',
   '/app.js',
   '/config.js',
-  '/scanner.js',
   '/camera.js',
   '/signature.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ].map(path => `${BASE_PATH}${path}`);
 
 // 安裝 Service Worker
