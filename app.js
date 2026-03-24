@@ -23,6 +23,8 @@ let isProcessingReturnScan = false;
 let lastReturnScannedCode = '';
 let currentReturnLoan = null;
 let currentReturnDraft = null;
+let currentReturnEquipment = null;
+let currentReturnMode = 'standard';
 
 // ==========================================
 // 初始化
@@ -645,6 +647,11 @@ function initializeReportView() {
   if (monthInput && !monthInput.value) {
     monthInput.value = getDefaultReportMonth();
   }
+
+  const reportTypeInput = document.getElementById('reportType');
+  if (reportTypeInput && !reportTypeInput.value) {
+    reportTypeInput.value = 'maintenance';
+  }
 }
 
 function getDefaultReportMonth() {
@@ -656,6 +663,7 @@ function getDefaultReportMonth() {
 }
 
 function handleGenerateMonthlyReport() {
+  const reportType = document.getElementById('reportType').value;
   const area = document.getElementById('reportArea').value;
   const month = document.getElementById('reportMonth').value;
 
@@ -664,7 +672,9 @@ function handleGenerateMonthlyReport() {
     return;
   }
 
-  callAPI('generateMonthlyMaintenanceReport', {
+  const action = reportType === 'loan' ? 'generateMonthlyLoanReport' : 'generateMonthlyMaintenanceReport';
+
+  callAPI(action, {
     area: area,
     month: month
   }, function(response) {
@@ -674,12 +684,12 @@ function handleGenerateMonthlyReport() {
       return;
     }
 
-    displayReportResult(response.data, area, month);
-    showToast('月報表已產生', 'success');
+    displayReportResult(response.data, reportType, area, month);
+    showToast((reportType === 'loan' ? '外借月報' : '盤點月報') + '已產生', 'success');
   });
 }
 
-function displayReportResult(data, area, month) {
+function displayReportResult(data, reportType, area, month) {
   const reportResult = document.getElementById('reportResult');
   const reportResultText = document.getElementById('reportResultText');
   const reportOpenLink = document.getElementById('reportOpenLink');
@@ -690,8 +700,9 @@ function displayReportResult(data, area, month) {
   }
 
   const areaText = area || '全部區域';
+  const reportTypeText = reportType === 'loan' ? '外借月報' : '盤點月報';
   reportResult.style.display = 'block';
-  reportResultText.textContent = `${areaText} ${month} 月報表已建立，共 ${data.rowCount || 0} 筆`;
+  reportResultText.textContent = `${areaText} ${month} ${reportTypeText}已建立，共 ${data.rowCount || 0} 筆`;
   reportOpenLink.href = data.url || '#';
   reportDownloadLink.href = data.downloadUrl || data.url || '#';
   reportDownloadLink.setAttribute('download', data.fileName || 'monthly-report.pdf');
@@ -946,7 +957,7 @@ function resetLoanWorkflow() {
 
   if (borrowerInput) borrowerInput.value = '';
   if (manualPropertyInput) manualPropertyInput.value = '';
-  if (startDateInput) startDateInput.value = getTodayDateString();
+  if (startDateInput) startDateInput.value = getCurrentDateTimeLocalString();
   if (returnDateInput) returnDateInput.value = '';
   if (purposeInput) purposeInput.value = '';
   if (equipmentName) equipmentName.textContent = '尚未掃描';
@@ -993,6 +1004,16 @@ function getTodayDateString() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getCurrentDateTimeLocalString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function capitalizeFirstLetter(text) {
@@ -1152,7 +1173,7 @@ function populateLoanEquipment(equipment) {
   if (equipmentName) equipmentName.textContent = equipment.equipmentName || '未命名輔具';
   if (equipmentId) equipmentId.textContent = equipment.propertyId || '';
   if (startDateInput && !startDateInput.value) {
-    startDateInput.value = getTodayDateString();
+    startDateInput.value = getCurrentDateTimeLocalString();
   }
 }
 
@@ -1201,8 +1222,8 @@ function renderLoanSignatureSummary() {
   summary.innerHTML = `
     <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentLoanEquipment.equipmentName} (${currentLoanEquipment.propertyId})</span></div>
     <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentLoanDraft.borrower}</span></div>
-    <div class="loan-signature-summary-item"><strong>借用起始日</strong><span>${currentLoanDraft.loanStartDate}</span></div>
-    <div class="loan-signature-summary-item"><strong>預計歸還日</strong><span>${currentLoanDraft.expectedReturnDate}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentLoanDraft.loanStartDate)}</span></div>
+    <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentLoanDraft.expectedReturnDate)}</span></div>
     <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentLoanDraft.purpose}</span></div>
   `;
 }
@@ -1295,7 +1316,7 @@ function resetReturnWorkflow() {
   const signatureSummary = document.getElementById('returnSignatureSummary');
 
   if (manualPropertyInput) manualPropertyInput.value = '';
-  if (actualDateInput) actualDateInput.value = getTodayDateString();
+  if (actualDateInput) actualDateInput.value = getCurrentDateTimeLocalString();
   if (lookupResult) {
     lookupResult.style.display = 'none';
     lookupResult.innerHTML = '';
@@ -1482,10 +1503,11 @@ function renderReturnLoanSummary() {
 
   const summaryHtml = `
     <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentReturnLoan.equipmentName} (${currentReturnLoan.propertyId})</span></div>
-    <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnLoan.borrower || '-'}</span></div>
-    <div class="loan-signature-summary-item"><strong>借用起始日</strong><span>${formatDisplayDate(currentReturnLoan.loanDate)}</span></div>
-    <div class="loan-signature-summary-item"><strong>預計歸還日</strong><span>${formatDisplayDate(currentReturnLoan.expectedReturnDate)}</span></div>
-    <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnLoan.purpose || '-'}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnLoan.borrower || '歷史資料未建檔'}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.loanDate)}</span></div>
+    <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.expectedReturnDate)}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnLoan.purpose || '歷史資料未建檔'}</span></div>
+    ${currentReturnLoan.isLegacyReturn ? '<div class="loan-signature-summary-item"><strong>資料狀態</strong><span>此筆為歷史外借補登歸還，系統將直接建立歸還紀錄。</span></div>' : ''}
   `;
 
   const loanSummary = document.getElementById('returnLoanSummary');
@@ -1494,7 +1516,7 @@ function renderReturnLoanSummary() {
 
   if (signatureSummary && currentReturnDraft) {
     signatureSummary.innerHTML = summaryHtml + `
-      <div class="loan-signature-summary-item"><strong>實際歸還日</strong><span>${currentReturnDraft.actualReturnDate}</span></div>
+      <div class="loan-signature-summary-item"><strong>實際歸還日期時間</strong><span>${formatDisplayDateTime(currentReturnDraft.actualReturnDate)}</span></div>
       <div class="loan-signature-summary-item"><strong>中心人員</strong><span>${currentUser ? currentUser.name : '-'}</span></div>
     `;
   }
@@ -1549,6 +1571,8 @@ function handleReturnLoanSubmit() {
 
   callAPI('returnLoan', {
     loanId: currentReturnLoan.loanId,
+    propertyId: currentReturnLoan.propertyId,
+    isLegacyReturn: currentReturnLoan.isLegacyReturn ? 'true' : 'false',
     actualReturnDate: currentReturnDraft.actualReturnDate,
     staffName: currentUser.name,
     signatureData: signatureData
@@ -1564,24 +1588,46 @@ function handleReturnLoanSubmit() {
   });
 }
 
-function formatDisplayDate(value) {
+function formatDisplayDateTime(value) {
   if (!value) return '-';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    return String(value);
+  const textValue = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(textValue)) {
+    return textValue.replace('T', ' ');
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(textValue)) {
+    return textValue + ' 00:00';
   }
   const date = new Date(value);
   if (isNaN(date.getTime())) {
-    return String(value);
+    return textValue.replace('T', ' ');
   }
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function normalizeDateString(value) {
-  const text = formatDisplayDate(value);
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+  if (!value) return '';
+
+  const textValue = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(textValue)) {
+    return textValue;
+  }
+
+  const date = new Date(textValue);
+  if (isNaN(date.getTime())) {
+    return '';
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 // ==========================================
@@ -1729,8 +1775,10 @@ function handleBarcodeDetected(barcode) {
     isProcessingScanResult = false;
 
     if (response.success) {
+      const equipmentName = response.data.equipmentName || '未命名輔具';
       resultDiv.innerHTML = `
         <p style="color: #059669;"><i class="fas fa-check-circle"></i> 盤點成功</p>
+        <p><strong>輔具品名：</strong>${equipmentName}</p>
         <p><strong>財產編號：</strong>${barcode}</p>
         <button class="btn btn-primary" onclick="restartBarcodeScanner()">
           <i class="fas fa-redo"></i> 繼續掃描

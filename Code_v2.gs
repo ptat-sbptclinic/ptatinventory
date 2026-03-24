@@ -103,6 +103,8 @@ function doPost(e) {
         return handleGetStaffList(e);
       case 'generateMonthlyMaintenanceReport':
         return handleGenerateMonthlyMaintenanceReport(e);
+      case 'generateMonthlyLoanReport':
+        return handleGenerateMonthlyLoanReport(e);
       default:
         return createResponse(false, '未知的操作');
     }
@@ -176,14 +178,14 @@ function handleScanBarcode(e) {
   // 搜尋財產編號或庫存編號
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (row[EQUIPMENT_COLS.PROPERTY_ID] === barcode || row[EQUIPMENT_COLS.INVENTORY_ID] === barcode) {
+  if (row[EQUIPMENT_COLS.PROPERTY_ID] === barcode || row[EQUIPMENT_COLS.INVENTORY_ID] === barcode) {
       const equipment = createEquipmentObject(row);
       equipment.rowIndex = i + 1;
       return createResponse(true, '找到輔具', equipment);
     }
   }
   
-  return createResponse(false, '找不到此輔具編號');
+  return createResponse(false, '查無此財編對應的展示輔具，可能不是展示輔具或尚未建檔');
 }
 
 // ==========================================
@@ -221,7 +223,7 @@ function handleQuickInventory(e) {
   }
   
   if (rowIndex === -1) {
-    return createResponse(false, '找不到此輔具');
+    return createResponse(false, '查無此財編對應的展示輔具，可能不是展示輔具或尚未建檔');
   }
   
   // 自動判斷當次作為
@@ -282,7 +284,9 @@ function handleQuickInventory(e) {
   
   return createResponse(true, '盤點完成', {
     currentAction: currentAction,
-    photoUrl: photoUrl
+    photoUrl: photoUrl,
+    equipmentName: equipmentName,
+    propertyId: propertyId
   });
 }
 
@@ -486,6 +490,29 @@ function handleGetActiveLoanByPropertyId(e) {
     });
   }
 
+  const equipment = findEquipmentByPropertyId(propertyId);
+  if (equipment && equipment.currentStatus === '外借中') {
+    return createResponse(true, '查詢成功', {
+      loanId: '',
+      propertyId: equipment.propertyId,
+      equipmentName: equipment.equipmentName,
+      borrower: '',
+      contactPerson: '',
+      contactPhone: '',
+      loanDate: '',
+      expectedReturnDate: '',
+      actualReturnDate: '',
+      status: '外借中',
+      staffName: '',
+      signatureUrl: '',
+      purpose: '',
+      notes: '歷史外借資料未建檔',
+      returnStaffName: '',
+      returnSignatureUrl: '',
+      isLegacyReturn: true
+    });
+  }
+
   return createResponse(false, '找不到此外借中的輔具');
 }
 
@@ -494,8 +521,10 @@ function handleReturnLoan(e) {
   const actualReturnDate = e.parameter.actualReturnDate;
   const staffName = e.parameter.staffName || '';
   const signatureData = e.parameter.signatureData || '';
+  const propertyIdParam = resolvePropertyId(e.parameter.propertyId);
+  const isLegacyReturn = e.parameter.isLegacyReturn === 'true';
   
-  if (!loanId || !actualReturnDate || !staffName) {
+  if ((!loanId && !propertyIdParam) || !actualReturnDate || !staffName) {
     return createResponse(false, '請提供必要資訊');
   }
 
@@ -508,7 +537,7 @@ function handleReturnLoan(e) {
   ensureLoanSheetColumns(loanSheet);
   const loanData = loanSheet.getDataRange().getValues();
   
-  let propertyId = '';
+  let propertyId = propertyIdParam || '';
   let loanRow = -1;
   let loanDate = null;
   
@@ -521,7 +550,7 @@ function handleReturnLoan(e) {
     }
   }
   
-  if (loanRow === -1) {
+  if (loanRow === -1 && !isLegacyReturn) {
     return createResponse(false, '找不到此外借記錄');
   }
 
@@ -549,11 +578,37 @@ function handleReturnLoan(e) {
     }
   }
   
-  // 更新外借記錄
-  loanSheet.getRange(loanRow, LOAN_COLS.ACTUAL_RETURN_DATE + 1).setValue(returnDate);
-  loanSheet.getRange(loanRow, LOAN_COLS.STATUS + 1).setValue('已歸還');
-  loanSheet.getRange(loanRow, LOAN_COLS.RETURN_STAFF_NAME + 1).setValue(staffName);
-  loanSheet.getRange(loanRow, LOAN_COLS.RETURN_SIGNATURE_URL + 1).setValue(returnSignatureUrl);
+  if (loanRow !== -1) {
+    loanSheet.getRange(loanRow, LOAN_COLS.ACTUAL_RETURN_DATE + 1).setValue(returnDate);
+    loanSheet.getRange(loanRow, LOAN_COLS.STATUS + 1).setValue('已歸還');
+    loanSheet.getRange(loanRow, LOAN_COLS.RETURN_STAFF_NAME + 1).setValue(staffName);
+    loanSheet.getRange(loanRow, LOAN_COLS.RETURN_SIGNATURE_URL + 1).setValue(returnSignatureUrl);
+  } else {
+    const equipment = findEquipmentByPropertyId(propertyId);
+    if (!equipment) {
+      return createResponse(false, '找不到此輔具');
+    }
+
+    loanSheet.appendRow([
+      'LEGACY-' + Utilities.formatDate(new Date(), 'GMT+8', 'yyyyMMddHHmmss'),
+      propertyId,
+      equipment.equipmentName,
+      '歷史資料未建檔',
+      '',
+      '',
+      '',
+      '',
+      returnDate,
+      '已歸還',
+      '',
+      '',
+      '歷史外借資料補登歸還',
+      '歷史外借資料補登歸還',
+      now,
+      staffName,
+      returnSignatureUrl
+    ]);
+  }
   
   // 更新輔具狀態為「展示中」
   const equipSheet = getSheet(SHEET_NAMES.EQUIPMENT);
@@ -568,6 +623,80 @@ function handleReturnLoan(e) {
   }
   
   return createResponse(true, '歸還成功');
+}
+
+function handleGenerateMonthlyLoanReport(e) {
+  const month = e.parameter.month;
+  const area = e.parameter.area || '';
+
+  if (!month) {
+    return createResponse(false, '請提供報表月份');
+  }
+
+  const monthInfo = parseReportMonth(month);
+  if (!monthInfo) {
+    return createResponse(false, '月份格式錯誤，請使用 YYYY-MM');
+  }
+
+  const loanSheet = getSheet(SHEET_NAMES.LOANS);
+  ensureLoanSheetColumns(loanSheet);
+  const loanData = loanSheet.getDataRange().getValues();
+  const rows = [];
+
+  for (let i = 1; i < loanData.length; i++) {
+    const row = loanData[i];
+    if (!row[LOAN_COLS.LOAN_ID]) continue;
+
+    const propertyId = row[LOAN_COLS.PROPERTY_ID];
+    const loanDate = parseSheetDateValue(row[LOAN_COLS.LOAN_DATE]);
+    const actualReturnDate = parseSheetDateValue(row[LOAN_COLS.ACTUAL_RETURN_DATE]);
+    const expectedReturnDate = parseSheetDateValue(row[LOAN_COLS.EXPECTED_RETURN_DATE]);
+    const equipment = findEquipmentByPropertyId(propertyId);
+    const equipmentArea = equipment ? extractArea(propertyId, equipment.keeper) : '';
+
+    if (area && equipmentArea !== area) continue;
+
+    const inMonth = (loanDate && isDateInMonth(loanDate, monthInfo.year, monthInfo.monthIndex)) ||
+      (actualReturnDate && isDateInMonth(actualReturnDate, monthInfo.year, monthInfo.monthIndex)) ||
+      (expectedReturnDate && isDateInMonth(expectedReturnDate, monthInfo.year, monthInfo.monthIndex));
+    if (!inMonth) continue;
+
+    rows.push({
+      sequence: rows.length + 1,
+      propertyId: propertyId,
+      equipmentName: row[LOAN_COLS.EQUIPMENT_NAME] || '',
+      borrower: row[LOAN_COLS.BORROWER] || '',
+      loanDate: loanDate,
+      expectedReturnDate: expectedReturnDate,
+      actualReturnDate: actualReturnDate,
+      status: row[LOAN_COLS.STATUS] || '',
+      staffName: row[LOAN_COLS.STAFF_NAME] || '',
+      returnStaffName: row[LOAN_COLS.RETURN_STAFF_NAME] || ''
+    });
+  }
+
+  if (rows.length === 0) {
+    return createResponse(false, '該月份沒有符合條件的外借紀錄');
+  }
+
+  const reportTitle = buildMonthlyLoanReportTitle(area, monthInfo);
+  const fileName = buildMonthlyLoanReportFileName(area, monthInfo);
+  const html = buildMonthlyLoanReportHtml(reportTitle, rows);
+  const pdfBlob = HtmlService.createHtmlOutput(html)
+    .getBlob()
+    .getAs(MimeType.PDF)
+    .setName(fileName + '.pdf');
+  const folder = getOrCreateFolder('月報表PDF');
+  const pdfFile = folder.createFile(pdfBlob);
+  pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return createResponse(true, '外借月報產生成功', {
+    fileId: pdfFile.getId(),
+    fileName: pdfFile.getName(),
+    url: pdfFile.getUrl(),
+    downloadUrl: 'https://drive.google.com/uc?export=download&id=' + pdfFile.getId(),
+    rowCount: rows.length
+  });
 }
 
 // ==========================================
@@ -785,6 +914,16 @@ function buildMonthlyReportFileName(area, monthInfo) {
   return areaTitle + '展示輔具盤點月報表' + monthInfo.year + monthInfo.monthLabel;
 }
 
+function buildMonthlyLoanReportTitle(area, monthInfo) {
+  const areaTitle = area ? area : '全區';
+  return areaTitle + '輔具資源中心' + monthInfo.rocYear + '年' + monthInfo.monthLabel + '月份外借流程月報表';
+}
+
+function buildMonthlyLoanReportFileName(area, monthInfo) {
+  const areaTitle = area ? area : '全區';
+  return areaTitle + '展示輔具外借月報表' + monthInfo.year + monthInfo.monthLabel;
+}
+
 function buildMonthlyReportHtml(title, reportRows) {
   const tableRows = reportRows.map(function(row) {
     return '<tr>' +
@@ -864,6 +1003,71 @@ function buildMonthlyReportHtml(title, reportRows) {
   ].join('');
 }
 
+function buildMonthlyLoanReportHtml(title, reportRows) {
+  const tableRows = reportRows.map(function(row) {
+    return '<tr>' +
+      '<td class="col-seq">' + row.sequence + '</td>' +
+      '<td class="col-property">' + escapeHtml(row.propertyId) + '</td>' +
+      '<td class="col-name">' + escapeHtml(row.equipmentName) + '</td>' +
+      '<td class="col-borrower">' + escapeHtml(row.borrower) + '</td>' +
+      '<td class="col-time">' + formatNullableReportDateTime(row.loanDate) + '</td>' +
+      '<td class="col-time">' + formatNullableReportDateTime(row.expectedReturnDate) + '</td>' +
+      '<td class="col-time">' + formatNullableReportDateTime(row.actualReturnDate) + '</td>' +
+      '<td class="col-status">' + escapeHtml(row.status) + '</td>' +
+      '<td class="col-keeper">' + escapeHtml(row.staffName) + '</td>' +
+      '<td class="col-keeper">' + escapeHtml(row.returnStaffName) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return [
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<style>',
+    '@page { size: A4 landscape; margin: 10mm 6mm 14mm 6mm; }',
+    'body { font-family: Arial, "Microsoft JhengHei", sans-serif; color: #111827; font-size: 10px; }',
+    '.report-title { text-align: center; font-size: 17px; font-weight: 700; margin: 0 0 8px; }',
+    'table { width: 100%; border-collapse: collapse; table-layout: fixed; }',
+    'thead { display: table-header-group; }',
+    'tr { page-break-inside: avoid; }',
+    'th, td { border: 1px solid #111827; padding: 4px; vertical-align: top; word-break: break-word; }',
+    'th { text-align: center; font-weight: 700; }',
+    '.col-seq { width: 4%; text-align: center; }',
+    '.col-property { width: 12%; text-align: center; }',
+    '.col-name { width: 14%; }',
+    '.col-borrower { width: 13%; }',
+    '.col-time { width: 12%; text-align: center; }',
+    '.col-status { width: 7%; text-align: center; }',
+    '.col-keeper { width: 7%; text-align: center; }',
+    '</style>',
+    '</head>',
+    '<body>',
+    '<div class="report-title">' + escapeHtml(title) + '</div>',
+    '<table>',
+    '<thead>',
+    '<tr>',
+    '<th class="col-seq">序號</th>',
+    '<th class="col-property">財產編號</th>',
+    '<th class="col-name">輔具品名</th>',
+    '<th class="col-borrower">借用人/單位</th>',
+    '<th class="col-time">外借日期時間</th>',
+    '<th class="col-time">預計歸還日期時間</th>',
+    '<th class="col-time">實際歸還日期時間</th>',
+    '<th class="col-status">外借狀態</th>',
+    '<th class="col-keeper">外借經辦</th>',
+    '<th class="col-keeper">歸還經辦</th>',
+    '</tr>',
+    '</thead>',
+    '<tbody>',
+    tableRows,
+    '</tbody>',
+    '</table>',
+    '</body>',
+    '</html>'
+  ].join('');
+}
+
 function renderCurrentActionHtml(actionText) {
   const flags = parseCurrentAction(actionText);
   return '<span class="action-line">' + (flags.clean ? '■' : '□') + '需清潔</span>' +
@@ -897,6 +1101,10 @@ function formatReportDateTime(date) {
   const amPm = hour >= 12 ? '下午' : '上午';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   return datePart + '<br>' + amPm + ' ' + displayHour + ':' + minute + ':' + second;
+}
+
+function formatNullableReportDateTime(date) {
+  return date ? formatReportDateTime(date) : '-';
 }
 
 function escapeHtml(value) {
@@ -935,15 +1143,17 @@ function formatDateTime(date) {
 
 function parseDateInput(value) {
   const text = String(value || '').trim();
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?$/);
   if (!match) return null;
 
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  const date = new Date(year, month - 1, day);
+  const hour = Number(match[4] || 0);
+  const minute = Number(match[5] || 0);
+  const date = new Date(year, month - 1, day, hour, minute, 0, 0);
 
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day || date.getHours() !== hour || date.getMinutes() !== minute) {
     return null;
   }
 
@@ -964,6 +1174,22 @@ function resolvePropertyId(inputValue) {
   }
 
   return target;
+}
+
+function findEquipmentByPropertyId(propertyId) {
+  const target = String(propertyId || '').trim();
+  if (!target) return null;
+
+  const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][EQUIPMENT_COLS.PROPERTY_ID] === target) {
+      return createEquipmentObject(data[i]);
+    }
+  }
+
+  return null;
 }
 
 function extractArea(propertyId, keeper) {

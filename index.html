@@ -185,11 +185,19 @@
       <!-- 月報表頁面 -->
       <div id="reportView" class="view">
         <div class="container">
-          <h2><i class="fas fa-file-pdf"></i> 維護紀錄月報表</h2>
-          <p class="subtitle">依區域與月份產出展示輔具維護清冊 PDF</p>
+          <h2><i class="fas fa-file-pdf"></i> 月報表</h2>
+          <p class="subtitle">可依月份產出盤點月報或外借月報 PDF</p>
 
           <div class="report-panel">
             <div class="filter-section">
+              <div class="filter-group">
+                <label for="reportType">報表類型</label>
+                <select id="reportType" class="form-control">
+                  <option value="maintenance">盤點月報</option>
+                  <option value="loan">外借月報</option>
+                </select>
+              </div>
+
               <div class="filter-group">
                 <label for="reportArea">區域</label>
                 <select id="reportArea" class="form-control">
@@ -350,13 +358,13 @@
             </div>
 
             <div class="form-group">
-              <label for="loanStartDate">借用起始日 *</label>
-              <input type="date" id="loanStartDate" class="form-control" required>
+              <label for="loanStartDate">借用起始日期時間 *</label>
+              <input type="datetime-local" id="loanStartDate" class="form-control" required>
             </div>
 
             <div class="form-group">
-              <label for="loanExpectedReturnDate">預計歸還日 *</label>
-              <input type="date" id="loanExpectedReturnDate" class="form-control" required>
+              <label for="loanExpectedReturnDate">預計歸還日期時間 *</label>
+              <input type="datetime-local" id="loanExpectedReturnDate" class="form-control" required>
             </div>
 
             <div class="form-group">
@@ -450,8 +458,8 @@
             <div id="returnLoanSummary" class="loan-signature-summary"></div>
 
             <div class="form-group">
-              <label for="returnActualDate">實際歸還日期 *</label>
-              <input type="date" id="returnActualDate" class="form-control" required>
+              <label for="returnActualDate">實際歸還日期時間 *</label>
+              <input type="datetime-local" id="returnActualDate" class="form-control" required>
             </div>
 
             <div class="button-group loan-flow-actions">

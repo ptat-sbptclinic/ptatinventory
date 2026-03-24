@@ -1051,6 +1051,16 @@ textarea.form-control {
   color: var(--gray-700);
 }
 
+.loan-legacy-warning {
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  color: #92400E;
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
 .loan-flow-actions {
   justify-content: space-between;
 }
