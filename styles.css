@@ -825,6 +825,12 @@ textarea.form-control {
   gap: 1rem;
 }
 
+.loan-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
 .loan-card {
   background: white;
   border: 1px solid var(--gray-200);
@@ -921,6 +927,111 @@ textarea.form-control {
 
 .modal-body {
   padding: 1.5rem;
+}
+
+.loan-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.loan-step-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--gray-50);
+  color: var(--gray-500);
+}
+
+.loan-step-chip span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: white;
+  border: 1px solid var(--gray-200);
+  font-weight: 700;
+}
+
+.loan-step-chip strong {
+  font-size: 0.95rem;
+}
+
+.loan-step-chip.active {
+  background: #EEF2FF;
+  border-color: #4F46E5;
+  color: #312E81;
+}
+
+.loan-step-chip.active span {
+  background: #4F46E5;
+  border-color: #4F46E5;
+  color: white;
+}
+
+.loan-step-panel {
+  display: none;
+}
+
+.loan-step-panel.active {
+  display: block;
+}
+
+.loan-scan-instructions {
+  margin-bottom: 1rem;
+}
+
+.loan-selected-equipment,
+.loan-signature-summary {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.loan-selected-equipment-label {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  margin-bottom: 0.35rem;
+}
+
+.loan-selected-equipment-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.loan-selected-equipment-id {
+  margin-top: 0.25rem;
+  color: var(--gray-600);
+}
+
+.loan-signature-summary {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.loan-signature-summary-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.loan-signature-summary-item strong {
+  min-width: 6rem;
+  color: var(--gray-700);
+}
+
+.loan-flow-actions {
+  justify-content: space-between;
 }
 
 #photoVideo, #photoPreview {
@@ -1036,6 +1147,39 @@ textarea.form-control {
   
   .button-group {
     flex-direction: column;
+  }
+
+  .loan-toolbar {
+    justify-content: stretch;
+  }
+
+  .loan-toolbar .btn {
+    width: 100%;
+  }
+
+  .loan-stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-step-chip {
+    padding: 0.75rem 0.875rem;
+  }
+
+  .loan-signature-summary-item {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .loan-signature-summary-item strong {
+    min-width: auto;
+  }
+
+  .loan-flow-actions {
+    flex-direction: column-reverse;
+  }
+
+  .loan-flow-actions .btn {
+    width: 100%;
   }
 
   .report-actions,

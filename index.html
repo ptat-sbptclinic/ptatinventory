@@ -156,6 +156,12 @@
         <div class="container">
           <h2><i class="fas fa-handshake"></i> 外借管理</h2>
           <p class="subtitle">目前外借中的輔具</p>
+
+          <div class="loan-toolbar">
+            <button id="openLoanWorkflowBtn" class="btn btn-primary">
+              <i class="fas fa-right-left"></i> 進行外借
+            </button>
+          </div>
           
           <div class="loan-tabs">
             <button class="loan-tab active" data-area="">全部</button>
@@ -281,54 +287,99 @@
     <div id="loanModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3><i class="fas fa-handshake"></i> 建立外借記錄</h3>
-          <button class="modal-close">&times;</button>
+          <h3><i class="fas fa-handshake"></i> 外借流程</h3>
+          <button id="closeLoanWorkflowBtn" class="modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label>輔具編號</label>
-            <input type="text" id="loanEquipmentId" class="form-control" readonly>
+          <div class="loan-stepper">
+            <div id="loanStepScanIndicator" class="loan-step-chip active">
+              <span>1</span>
+              <strong>掃描條碼</strong>
+            </div>
+            <div id="loanStepFormIndicator" class="loan-step-chip">
+              <span>2</span>
+              <strong>填寫資料</strong>
+            </div>
+            <div id="loanStepSignatureIndicator" class="loan-step-chip">
+              <span>3</span>
+              <strong>手寫簽名</strong>
+            </div>
           </div>
-          
-          <div class="form-group">
-            <label>輔具名稱</label>
-            <input type="text" id="loanEquipmentName" class="form-control" readonly>
-          </div>
-          
-          <div class="form-group">
-            <label>外借單位 *</label>
-            <input type="text" id="loanBorrowUnit" class="form-control" required>
-          </div>
-          
-          <div class="form-group">
-            <label>聯絡人 *</label>
-            <input type="text" id="loanContactPerson" class="form-control" required>
-          </div>
-          
-          <div class="form-group">
-            <label>聯絡電話 *</label>
-            <input type="tel" id="loanContactPhone" class="form-control" required>
-          </div>
-          
-          <div class="form-group">
-            <label>預計歸還日期</label>
-            <input type="date" id="loanExpectedReturnDate" class="form-control">
-          </div>
-          
-          <div class="form-group">
-            <label>電子簽名</label>
-            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
-            <button id="clearSignatureBtn" class="btn btn-secondary btn-sm">
-              <i class="fas fa-eraser"></i> 清除簽名
-            </button>
-          </div>
-          
-          <div class="button-group">
-            <button id="cancelLoanBtn" class="btn btn-secondary">取消</button>
-            <button id="submitLoanBtn" class="btn btn-primary">
-              <i class="fas fa-check"></i> 建立外借
-            </button>
-          </div>
+
+          <section id="loanScanStep" class="loan-step-panel active">
+            <div class="scan-instructions loan-scan-instructions">
+              <p><i class="fas fa-camera"></i> 請用相機掃描輔具條碼，系統會帶出外借資料頁面</p>
+            </div>
+
+            <div id="loanScannerContainer" class="scanner-container" style="display: none;">
+              <div id="loanQrReader"></div>
+            </div>
+
+            <div class="scan-controls">
+              <button id="startLoanScanBtn" class="btn btn-primary">
+                <i class="fas fa-camera"></i> 開始掃描
+              </button>
+              <button id="stopLoanScanBtn" class="btn btn-secondary" style="display: none;">
+                <i class="fas fa-stop"></i> 停止掃描
+              </button>
+            </div>
+
+            <div id="loanScanResult" class="scan-result" style="display: none;"></div>
+          </section>
+
+          <section id="loanFormStep" class="loan-step-panel">
+            <div class="loan-selected-equipment">
+              <div class="loan-selected-equipment-label">本次外借輔具</div>
+              <div id="loanSelectedEquipmentName" class="loan-selected-equipment-name">尚未掃描</div>
+              <div id="loanSelectedEquipmentId" class="loan-selected-equipment-id"></div>
+            </div>
+
+            <div class="form-group">
+              <label for="loanBorrower">借用人 / 單位 *</label>
+              <input type="text" id="loanBorrower" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="loanStartDate">借用起始日 *</label>
+              <input type="date" id="loanStartDate" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="loanExpectedReturnDate">預計歸還日 *</label>
+              <input type="date" id="loanExpectedReturnDate" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="loanPurpose">借用目的 *</label>
+              <textarea id="loanPurpose" class="form-control" rows="4" required></textarea>
+            </div>
+
+            <div class="button-group loan-flow-actions">
+              <button id="loanBackToScanBtn" class="btn btn-secondary">返回掃描</button>
+              <button id="loanContinueToSignatureBtn" class="btn btn-primary">
+                <i class="fas fa-arrow-right"></i> 前往簽名
+              </button>
+            </div>
+          </section>
+
+          <section id="loanSignatureStep" class="loan-step-panel">
+            <div id="loanSignatureSummary" class="loan-signature-summary"></div>
+
+            <div class="form-group">
+              <label>請於下方手寫簽名 *</label>
+              <canvas id="loanSignatureCanvas" class="signature-canvas"></canvas>
+              <button id="clearLoanSignatureBtn" class="btn btn-secondary btn-sm" type="button">
+                <i class="fas fa-eraser"></i> 清除重簽
+              </button>
+            </div>
+
+            <div class="button-group loan-flow-actions">
+              <button id="loanBackToFormBtn" class="btn btn-secondary">返回資料</button>
+              <button id="submitLoanBtn" class="btn btn-primary">
+                <i class="fas fa-check"></i> 完成外借
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>

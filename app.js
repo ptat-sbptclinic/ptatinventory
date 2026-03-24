@@ -11,6 +11,12 @@ let html5QrCode = null;
 let isScannerRunning = false;
 let isProcessingScanResult = false;
 let lastScannedCode = '';
+let loanQrCode = null;
+let isLoanScannerRunning = false;
+let isProcessingLoanScan = false;
+let lastLoanScannedCode = '';
+let currentLoanEquipment = null;
+let currentLoanDraft = null;
 
 // ==========================================
 // 初始化
@@ -77,6 +83,60 @@ function setupEventListeners() {
   const generateMonthlyReportBtn = document.getElementById('generateMonthlyReportBtn');
   if (generateMonthlyReportBtn) {
     generateMonthlyReportBtn.addEventListener('click', handleGenerateMonthlyReport);
+  }
+
+  const openLoanWorkflowBtn = document.getElementById('openLoanWorkflowBtn');
+  if (openLoanWorkflowBtn) {
+    openLoanWorkflowBtn.addEventListener('click', openLoanWorkflow);
+  }
+
+  const closeLoanWorkflowBtn = document.getElementById('closeLoanWorkflowBtn');
+  if (closeLoanWorkflowBtn) {
+    closeLoanWorkflowBtn.addEventListener('click', closeLoanWorkflow);
+  }
+
+  const loanModal = document.getElementById('loanModal');
+  if (loanModal) {
+    loanModal.addEventListener('click', function(event) {
+      if (event.target === loanModal) {
+        closeLoanWorkflow();
+      }
+    });
+  }
+
+  const startLoanScanBtn = document.getElementById('startLoanScanBtn');
+  if (startLoanScanBtn) {
+    startLoanScanBtn.addEventListener('click', startLoanBarcodeScanner);
+  }
+
+  const stopLoanScanBtn = document.getElementById('stopLoanScanBtn');
+  if (stopLoanScanBtn) {
+    stopLoanScanBtn.addEventListener('click', stopLoanBarcodeScanner);
+  }
+
+  const loanBackToScanBtn = document.getElementById('loanBackToScanBtn');
+  if (loanBackToScanBtn) {
+    loanBackToScanBtn.addEventListener('click', function() {
+      setLoanWorkflowStep('scan');
+      startLoanBarcodeScanner();
+    });
+  }
+
+  const loanContinueToSignatureBtn = document.getElementById('loanContinueToSignatureBtn');
+  if (loanContinueToSignatureBtn) {
+    loanContinueToSignatureBtn.addEventListener('click', handleLoanFormContinue);
+  }
+
+  const loanBackToFormBtn = document.getElementById('loanBackToFormBtn');
+  if (loanBackToFormBtn) {
+    loanBackToFormBtn.addEventListener('click', function() {
+      setLoanWorkflowStep('form');
+    });
+  }
+
+  const submitLoanBtn = document.getElementById('submitLoanBtn');
+  if (submitLoanBtn) {
+    submitLoanBtn.addEventListener('click', handleCreateLoan);
   }
 }
 
@@ -153,6 +213,7 @@ function handleLogin() {
 }
 
 function handleLogout() {
+  closeLoanWorkflow();
   currentUser = null;
   localStorage.removeItem('currentUser');
   showLoginView(true);
@@ -639,6 +700,10 @@ function loadLoanList() {
 function setupLoanTabs() {
   const tabs = document.querySelectorAll('.loan-tab');
   tabs.forEach(tab => {
+    if (tab.dataset.bound === 'true') {
+      return;
+    }
+
     tab.addEventListener('click', function() {
       // 移除所有 active
       tabs.forEach(t => t.classList.remove('active'));
@@ -651,6 +716,8 @@ function setupLoanTabs() {
       // 篩選並顯示
       filterLoanByArea();
     });
+
+    tab.dataset.bound = 'true';
   });
 }
 
@@ -727,6 +794,354 @@ function createLoanCard(equipment) {
   `;
   
   return card;
+}
+
+function openLoanWorkflow() {
+  if (!currentUser) {
+    showToast('請先登入', 'error');
+    return;
+  }
+
+  resetLoanWorkflow();
+
+  const modal = document.getElementById('loanModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+
+  startLoanBarcodeScanner();
+}
+
+function closeLoanWorkflow() {
+  const modal = document.getElementById('loanModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+
+  stopLoanBarcodeScanner();
+  resetLoanWorkflow();
+}
+
+function resetLoanWorkflow() {
+  currentLoanEquipment = null;
+  currentLoanDraft = null;
+  isProcessingLoanScan = false;
+  lastLoanScannedCode = '';
+
+  const resultDiv = document.getElementById('loanScanResult');
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+
+  const borrowerInput = document.getElementById('loanBorrower');
+  const startDateInput = document.getElementById('loanStartDate');
+  const returnDateInput = document.getElementById('loanExpectedReturnDate');
+  const purposeInput = document.getElementById('loanPurpose');
+  const equipmentName = document.getElementById('loanSelectedEquipmentName');
+  const equipmentId = document.getElementById('loanSelectedEquipmentId');
+  const signatureSummary = document.getElementById('loanSignatureSummary');
+
+  if (borrowerInput) borrowerInput.value = '';
+  if (startDateInput) startDateInput.value = getTodayDateString();
+  if (returnDateInput) returnDateInput.value = '';
+  if (purposeInput) purposeInput.value = '';
+  if (equipmentName) equipmentName.textContent = '尚未掃描';
+  if (equipmentId) equipmentId.textContent = '';
+  if (signatureSummary) signatureSummary.innerHTML = '';
+
+  if (typeof clearSignature === 'function') {
+    clearSignature('loanSignatureCanvas');
+  }
+
+  setLoanWorkflowStep('scan');
+}
+
+function setLoanWorkflowStep(step) {
+  const stepMap = {
+    scan: 'loanScanStep',
+    form: 'loanFormStep',
+    signature: 'loanSignatureStep'
+  };
+
+  Object.keys(stepMap).forEach(key => {
+    const panel = document.getElementById(stepMap[key]);
+    const indicator = document.getElementById('loanStep' + capitalizeFirstLetter(key) + 'Indicator');
+    if (panel) {
+      panel.classList.toggle('active', key === step);
+    }
+    if (indicator) {
+      indicator.classList.toggle('active', key === step);
+    }
+  });
+
+  if (step !== 'scan') {
+    stopLoanBarcodeScanner();
+  }
+
+  if (step === 'signature' && typeof initializeSignaturePad === 'function') {
+    initializeSignaturePad('loanSignatureCanvas', 'clearLoanSignatureBtn');
+  }
+}
+
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function capitalizeFirstLetter(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+async function startLoanBarcodeScanner() {
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('掃描元件未載入，請重新整理頁面', 'error');
+    return;
+  }
+
+  if (isLoanScannerRunning) {
+    return;
+  }
+
+  const container = document.getElementById('loanScannerContainer');
+  const startBtn = document.getElementById('startLoanScanBtn');
+  const stopBtn = document.getElementById('stopLoanScanBtn');
+  const resultDiv = document.getElementById('loanScanResult');
+
+  if (!container || !startBtn || !stopBtn) {
+    showToast('外借掃描介面初始化失敗', 'error');
+    return;
+  }
+
+  if (!loanQrCode) {
+    loanQrCode = new Html5Qrcode('loanQrReader');
+  }
+
+  setLoanWorkflowStep('scan');
+  container.style.display = 'block';
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-flex';
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+
+  const scanConfig = {
+    fps: 10,
+    qrbox: { width: 260, height: 120 },
+    aspectRatio: 1.777,
+    rememberLastUsedCamera: true
+  };
+
+  try {
+    await loanQrCode.start(
+      { facingMode: { exact: 'environment' } },
+      scanConfig,
+      onLoanScanSuccess,
+      () => {}
+    );
+    isLoanScannerRunning = true;
+  } catch (exactError) {
+    try {
+      await loanQrCode.start(
+        { facingMode: 'environment' },
+        scanConfig,
+        onLoanScanSuccess,
+        () => {}
+      );
+      isLoanScannerRunning = true;
+    } catch (error) {
+      console.error('啟動外借掃描失敗:', error);
+      showToast('無法啟動相機掃描，請確認相機權限', 'error');
+      stopLoanBarcodeScanner();
+    }
+  }
+}
+
+async function stopLoanBarcodeScanner() {
+  const container = document.getElementById('loanScannerContainer');
+  const startBtn = document.getElementById('startLoanScanBtn');
+  const stopBtn = document.getElementById('stopLoanScanBtn');
+
+  if (loanQrCode && isLoanScannerRunning) {
+    try {
+      await loanQrCode.stop();
+      await loanQrCode.clear();
+    } catch (error) {
+      console.warn('停止外借掃描時發生錯誤:', error);
+    }
+  }
+
+  isLoanScannerRunning = false;
+  isProcessingLoanScan = false;
+  lastLoanScannedCode = '';
+
+  if (container) container.style.display = 'none';
+  if (startBtn) startBtn.style.display = 'inline-flex';
+  if (stopBtn) stopBtn.style.display = 'none';
+}
+
+function onLoanScanSuccess(decodedText) {
+  const barcode = normalizeScannedCode(decodedText);
+  if (!barcode) return;
+  if (isProcessingLoanScan) return;
+  if (barcode === lastLoanScannedCode) return;
+
+  isProcessingLoanScan = true;
+  lastLoanScannedCode = barcode;
+  handleLoanBarcodeDetected(barcode);
+}
+
+function handleLoanBarcodeDetected(barcode) {
+  const resultDiv = document.getElementById('loanScanResult');
+  if (resultDiv) {
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+      <p><strong>掃描到條碼：</strong>${barcode}</p>
+      <p>正在查詢輔具資料...</p>
+    `;
+  }
+
+  callAPI('scanBarcode', { barcode: barcode }, function(response) {
+    isProcessingLoanScan = false;
+
+    if (!response.success || !response.data) {
+      lastLoanScannedCode = '';
+      if (resultDiv) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <p style="color: #DC2626;"><i class="fas fa-times-circle"></i> 找不到此輔具</p>
+          <p>${response.message || '請確認條碼是否正確'}</p>
+        `;
+      }
+      showToast(response.message || '找不到此輔具', 'error');
+      return;
+    }
+
+    const equipment = response.data;
+    if (equipment.currentStatus === '外借中') {
+      lastLoanScannedCode = '';
+      if (resultDiv) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <p style="color: #DC2626;"><i class="fas fa-circle-exclamation"></i> 此輔具已外借中</p>
+          <p><strong>${equipment.equipmentName}</strong> / ${equipment.propertyId}</p>
+        `;
+      }
+      showToast('此輔具目前已外借', 'error');
+      return;
+    }
+
+    currentLoanEquipment = equipment;
+    populateLoanEquipment(equipment);
+    setLoanWorkflowStep('form');
+  });
+}
+
+function populateLoanEquipment(equipment) {
+  const equipmentName = document.getElementById('loanSelectedEquipmentName');
+  const equipmentId = document.getElementById('loanSelectedEquipmentId');
+  const startDateInput = document.getElementById('loanStartDate');
+
+  if (equipmentName) equipmentName.textContent = equipment.equipmentName || '未命名輔具';
+  if (equipmentId) equipmentId.textContent = equipment.propertyId || '';
+  if (startDateInput && !startDateInput.value) {
+    startDateInput.value = getTodayDateString();
+  }
+}
+
+function handleLoanFormContinue() {
+  if (!currentLoanEquipment) {
+    showToast('請先掃描輔具條碼', 'error');
+    setLoanWorkflowStep('scan');
+    return;
+  }
+
+  const borrower = document.getElementById('loanBorrower').value.trim();
+  const loanStartDate = document.getElementById('loanStartDate').value;
+  const expectedReturnDate = document.getElementById('loanExpectedReturnDate').value;
+  const purpose = document.getElementById('loanPurpose').value.trim();
+
+  if (!borrower || !loanStartDate || !expectedReturnDate || !purpose) {
+    showToast('請完整填寫外借資料', 'error');
+    return;
+  }
+
+  if (expectedReturnDate < loanStartDate) {
+    showToast('預計歸還日不能早於借用起始日', 'error');
+    return;
+  }
+
+  currentLoanDraft = {
+    borrower: borrower,
+    loanStartDate: loanStartDate,
+    expectedReturnDate: expectedReturnDate,
+    purpose: purpose
+  };
+
+  renderLoanSignatureSummary();
+  if (typeof clearSignature === 'function') {
+    clearSignature('loanSignatureCanvas');
+  }
+  setLoanWorkflowStep('signature');
+}
+
+function renderLoanSignatureSummary() {
+  const summary = document.getElementById('loanSignatureSummary');
+  if (!summary || !currentLoanEquipment || !currentLoanDraft) {
+    return;
+  }
+
+  summary.innerHTML = `
+    <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentLoanEquipment.equipmentName} (${currentLoanEquipment.propertyId})</span></div>
+    <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentLoanDraft.borrower}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用起始日</strong><span>${currentLoanDraft.loanStartDate}</span></div>
+    <div class="loan-signature-summary-item"><strong>預計歸還日</strong><span>${currentLoanDraft.expectedReturnDate}</span></div>
+    <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentLoanDraft.purpose}</span></div>
+  `;
+}
+
+function handleCreateLoan() {
+  if (!currentLoanEquipment || !currentLoanDraft) {
+    showToast('請先完成外借資料填寫', 'error');
+    return;
+  }
+
+  let signatureData = '';
+  if (typeof getSignatureData === 'function') {
+    signatureData = getSignatureData('loanSignatureCanvas');
+  }
+
+  if (!signatureData) {
+    showToast('請先完成手寫簽名', 'error');
+    return;
+  }
+
+  callAPI('createLoan', {
+    propertyId: currentLoanEquipment.propertyId,
+    equipmentName: currentLoanEquipment.equipmentName,
+    borrower: currentLoanDraft.borrower,
+    contactPerson: currentLoanDraft.borrower,
+    contactPhone: '',
+    loanStartDate: currentLoanDraft.loanStartDate,
+    expectedReturnDate: currentLoanDraft.expectedReturnDate,
+    staffName: currentUser.name,
+    signatureData: signatureData,
+    purpose: currentLoanDraft.purpose,
+    notes: ''
+  }, function(response) {
+    if (response.success) {
+      showToast('外借建立成功', 'success');
+      closeLoanWorkflow();
+      loadLoanList();
+      loadMyEquipment();
+    } else {
+      showToast(response.message || '外借建立失敗', 'error');
+    }
+  });
 }
 
 // ==========================================
