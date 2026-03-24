@@ -45,6 +45,7 @@ function initializeApp() {
     return;
   }
   
+  initializeManualLink();
   setupEventListeners();
   loadStaffList();
   checkLoginStatus();
@@ -52,6 +53,12 @@ function initializeApp() {
 
 function checkConfig() {
   return CONFIG && CONFIG.API_URL && CONFIG.API_URL !== 'YOUR_APPS_SCRIPT_URL_HERE';
+}
+
+function initializeManualLink() {
+  const manualLink = document.getElementById('manualLink');
+  if (!manualLink) return;
+  manualLink.href = CONFIG.MANUAL_URL || './user-manual.html';
 }
 
 // ==========================================

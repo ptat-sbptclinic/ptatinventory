@@ -9,6 +9,10 @@ const CONFIG = {
   
   // 系統名稱
   APP_NAME: '輔具盤點管理系統',
+
+  // 使用說明書網址
+  // 若獨立部署到其他 repo，請改成完整網址
+  MANUAL_URL: './user-manual.html',
   
   // 版本
   VERSION: '2.0.0',

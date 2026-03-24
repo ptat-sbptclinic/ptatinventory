@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>輔具盤點管理系統使用說明書</title>
+  <style>
+    :root {
+      --ink: #1f2937;
+      --muted: #5b6474;
+      --line: #d7deea;
+      --panel: #ffffff;
+      --soft: #f6f8fc;
+      --brand: #1d4ed8;
+      --brand-deep: #1e3a8a;
+      --accent: #0f766e;
+      --warn: #b45309;
+      --danger: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(29, 78, 216, 0.12), transparent 24%),
+        linear-gradient(180deg, #eef4ff 0%, #f8fafc 22%, #f8fafc 100%);
+      line-height: 1.7;
+    }
+
+    .hero {
+      padding: 56px 20px 34px;
+      background: linear-gradient(135deg, var(--brand-deep), var(--brand));
+      color: #fff;
+    }
+
+    .hero-inner,
+    .content,
+    .footer {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.15;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 820px;
+      font-size: 1.05rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .hero-badge {
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 0.92rem;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 24px;
+      padding: 24px 20px 44px;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+    }
+
+    .sidebar h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 9px 10px;
+      border-radius: 10px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .sidebar a:hover {
+      background: #eef4ff;
+      color: var(--brand-deep);
+    }
+
+    .main {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1.5rem;
+      color: var(--brand-deep);
+    }
+
+    .card h3 {
+      margin: 20px 0 8px;
+      font-size: 1.05rem;
+    }
+
+    .card p,
+    .card li {
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .mini {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .mini strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .flow,
+    .checklist {
+      margin: 10px 0 0;
+      padding-left: 1.25rem;
+    }
+
+    .note,
+    .warn,
+    .ok {
+      padding: 14px 16px;
+      border-radius: 14px;
+      margin-top: 12px;
+    }
+
+    .note {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e3a8a;
+    }
+
+    .warn {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: var(--warn);
+    }
+
+    .ok {
+      background: #ecfdf5;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+
+    code {
+      padding: 0.14rem 0.34rem;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #312e81;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eff6ff;
+      color: var(--brand-deep);
+    }
+
+    .footer {
+      padding: 0 20px 40px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 960px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .hero {
+        padding-top: 42px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <h1>輔具盤點管理系統使用說明書</h1>
+      <p>本說明書提供同仁進行掃描盤點、我的輔具管理、外借與歸還、月報表下載、照片維護與批次盤點時的完整操作流程。若系統有更新，可直接替換本 HTML 檔並重新部署。</p>
+      <div class="hero-badges">
+        <div class="hero-badge">適用對象：中心同仁</div>
+        <div class="hero-badge">文件形式：單一 HTML</div>
+        <div class="hero-badge">可獨立部署到其他 repo</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+    <aside class="sidebar">
+      <h2>章節目錄</h2>
+      <a href="#overview">1. 系統概觀</a>
+      <a href="#login">2. 登入與首頁</a>
+      <a href="#scan">3. 掃描盤點</a>
+      <a href="#list">4. 輔具清單與詳細資料</a>
+      <a href="#my">5. 我的輔具與批次盤點</a>
+      <a href="#loan">6. 外借與歸還</a>
+      <a href="#report">7. 月報表</a>
+      <a href="#rules">8. 盤點判定規則</a>
+      <a href="#troubleshooting">9. 常見問題</a>
+      <a href="#deploy">10. 文件部署建議</a>
+    </aside>
+
+    <main class="main">
+      <section id="overview" class="card">
+        <h2>1. 系統概觀</h2>
+        <p>系統分成五個主要頁面：<code>掃描盤點</code>、<code>輔具清單</code>、<code>外借管理</code>、<code>月報表</code>、<code>我的輔具</code>。其中盤點、外借、照片更新、詳細資料修改等動作，都會影響該輔具當月是否被視為已完成盤點工作。</p>
+        <div class="grid">
+          <div class="mini"><strong>掃描盤點</strong>用手機相機掃描財產編號，快速完成單筆盤點。</div>
+          <div class="mini"><strong>輔具清單</strong>查看全體輔具，點卡片可開詳細資料。</div>
+          <div class="mini"><strong>我的輔具</strong>查看自己管理的輔具，支援單筆與批次盤點。</div>
+          <div class="mini"><strong>外借管理</strong>進行外借、歸還，以及處理歷史外借補登歸還。</div>
+        </div>
+      </section>
+
+      <section id="login" class="card">
+        <h2>2. 登入與首頁</h2>
+        <ol class="flow">
+          <li>開啟系統後，從下拉選單選擇自己的姓名。</li>
+          <li>按下 <code>登入系統</code> 後，系統會依照目前人員資料帶入可用功能。</li>
+          <li>登入成功後，右上方會顯示當前登入者名稱，並可點選登出。</li>
+          <li>頁首的 <code>使用說明</code> 會開啟本說明書。</li>
+        </ol>
+        <div class="note">若登入名單沒有自己的姓名，請先確認 Google Sheets 的人員清單工作表是否已建檔，且狀態為在職。</div>
+      </section>
+
+      <section id="scan" class="card">
+        <h2>3. 掃描盤點</h2>
+        <h3>標準流程</h3>
+        <ol class="flow">
+          <li>進入 <code>掃描盤點</code>。</li>
+          <li>按下 <code>開始掃描</code>，允許相機權限。</li>
+          <li>對準財產編號條碼，系統會自動辨識並完成盤點。</li>
+          <li>成功後會顯示輔具品名與財產編號。</li>
+          <li>可選擇 <code>繼續掃描</code> 或 <code>檢視輔具</code>。</li>
+        </ol>
+        <h3>檢視輔具</h3>
+        <p>若掃描完成後想補拍照片、補確認資料、或直接進入詳細資料頁，可按下 <code>檢視輔具</code>。系統會打開該輔具的詳細資料頁。</p>
+        <div class="warn">若掃描後顯示查無資料，代表該財編不在目前展示輔具清單中，可能尚未建檔或不屬於本系統管理項目。</div>
+      </section>
+
+      <section id="list" class="card">
+        <h2>4. 輔具清單與詳細資料</h2>
+        <p>在 <code>輔具清單</code> 頁面可依區域與目前動態篩選輔具，也可以用關鍵字搜尋財產編號、庫存編號、品名、保管人、放置地點與備註。</p>
+        <h3>點卡片後可查看</h3>
+        <ul class="checklist">
+          <li>輔具照片</li>
+          <li>放置地點、保管人、目前動態</li>
+          <li>來源、原始編號、入庫日期、最後盤點時間</li>
+          <li>當次作為與備註</li>
+        </ul>
+        <h3>可編輯欄位</h3>
+        <table>
+          <thead>
+            <tr><th>欄位</th><th>說明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>保管人</td><td>可直接改成目前實際管理人員。</td></tr>
+            <tr><td>放置地點</td><td>反映目前實際擺放位置。</td></tr>
+            <tr><td>當次作為</td><td>可勾選需清潔、需充電或同時勾選兩者。</td></tr>
+            <tr><td>備註</td><td>可記錄補充說明。</td></tr>
+          </tbody>
+        </table>
+        <div class="ok">詳細資料頁上方的照片區若顯示「尚無照片（點我拍照）」，可直接拍攝並上傳新照片。</div>
+      </section>
+
+      <section id="my" class="card">
+        <h2>5. 我的輔具與批次盤點</h2>
+        <p><code>我的輔具</code> 只顯示目前登入者負責管理的輔具，適合進行日常巡檢與大量盤點。</p>
+        <h3>單筆盤點</h3>
+        <ul class="checklist">
+          <li>每張卡片都保留 <code>完成盤點</code> 按鈕。</li>
+          <li>點卡片本體可開詳細資料，不影響單筆盤點流程。</li>
+        </ul>
+        <h3>批次盤點</h3>
+        <ol class="flow">
+          <li>先用搜尋或 <code>已盤點 / 未盤點</code> tab 篩選目標清單。</li>
+          <li>點選 <code>批次盤點模式</code>。</li>
+          <li>勾選要盤點的多筆輔具。</li>
+          <li>可使用 <code>全選目前篩選結果</code> 一次勾選目前畫面中的所有資料。</li>
+          <li>按下 <code>批次完成盤點</code> 後，系統會再次確認。</li>
+          <li>完成後會顯示成功與失敗筆數，並更新卡片狀態。</li>
+        </ol>
+        <div class="note">批次盤點只會處理目前登入人員負責管理的輔具，不會跨到全體輔具清單。</div>
+      </section>
+
+      <section id="loan" class="card">
+        <h2>6. 外借與歸還</h2>
+        <h3>外借</h3>
+        <ol class="flow">
+          <li>進入 <code>外借管理</code>。</li>
+          <li>可用掃描或手動輸入財產編號選取輔具。</li>
+          <li>填寫借用人、借用起始日期時間、預計歸還日期時間、用途等資料。</li>
+          <li>借用人簽名後送出。</li>
+        </ol>
+        <h3>歸還</h3>
+        <ol class="flow">
+          <li>可掃描或手動輸入財產編號查詢外借中的輔具。</li>
+          <li>填寫實際歸還日期時間並由中心人員簽名。</li>
+          <li>若是舊資料顯示為外借中但沒有完整外借明細，系統可補登直接歸還。</li>
+        </ol>
+      </section>
+
+      <section id="report" class="card">
+        <h2>7. 月報表</h2>
+        <p>月報表頁面可選擇區域與月份，並指定報表類型。</p>
+        <ul class="checklist">
+          <li><code>盤點月報</code>：產出當月盤點／維護清冊 PDF。</li>
+          <li><code>外借月報</code>：產出當月外借紀錄 PDF。</li>
+        </ul>
+        <p>報表目前會儲存至 Google Drive 的 <code>輔具盤點系統 / 月報表PDF</code> 資料夾。</p>
+      </section>
+
+      <section id="rules" class="card">
+        <h2>8. 盤點判定規則</h2>
+        <p>系統目前採用「當月只要對輔具做過任一有效作業，就視為本月已完成盤點工作」的邏輯。有效作業包含：</p>
+        <ul class="checklist">
+          <li>掃描或單筆快速盤點</li>
+          <li>批次盤點</li>
+          <li>外借</li>
+          <li>歸還</li>
+          <li>拍攝或更新輔具照片</li>
+          <li>從詳細資料頁儲存維護相關欄位</li>
+        </ul>
+        <div class="warn">系統已改採專用的「最近作業時間」欄位，不再直接用一般更新日期判斷，以避免匯入資料或舊修改造成誤判。</div>
+      </section>
+
+      <section id="troubleshooting" class="card">
+        <h2>9. 常見問題</h2>
+        <h3>掃不到條碼</h3>
+        <p>請確認相機權限已允許，並避免逆光。若現場不易掃描，可改用我的輔具卡片直接盤點。</p>
+        <h3>照片看不到</h3>
+        <p>請確認照片已上傳成功，系統會自動把 Google Drive 圖片網址轉成可顯示格式。若仍看不到，可重新拍攝一次。</p>
+        <h3>批次盤點有部分失敗</h3>
+        <p>通常代表該筆資料已不屬於目前登入者管理，或財編資料異常。請回到卡片逐筆確認。</p>
+        <h3>月報表產不出來</h3>
+        <p>請先確認該月份是否真的有資料，並確認 GAS 已部署最新版且前端 <code>API_URL</code> 指向正確網址。</p>
+      </section>
+
+      <section id="deploy" class="card">
+        <h2>10. 文件部署建議</h2>
+        <p>這份說明書是單一 HTML，可直接獨立部署到另一個 repo，例如 GitHub Pages、Netlify 或 Vercel。</p>
+        <h3>建議做法</h3>
+        <ol class="flow">
+          <li>建立一個專門放說明文件的新 repo。</li>
+          <li>只放這個 <code>user-manual.html</code> 與需要的靜態資產。</li>
+          <li>部署完成後取得公開網址。</li>
+          <li>回到主系統的 <code>config.js</code>，將 <code>MANUAL_URL</code> 改成該公開網址。</li>
+        </ol>
+        <div class="ok">這樣做很好，因為說明書可以獨立更新、單獨部署、也不會和主系統 API 發版綁在一起。</div>
+      </section>
+    </main>
+  </div>
+
+  <div class="footer">
+    本文件為輔具盤點管理系統使用說明書 HTML 版。若系統流程再調整，可直接更新本頁內容後重新部署。
+  </div>
+</body>
+</html>
