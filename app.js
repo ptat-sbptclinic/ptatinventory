@@ -2138,15 +2138,24 @@ function handleBarcodeDetected(barcode) {
 
     if (response.success) {
       const equipmentName = response.data.equipmentName || '未命名輔具';
+      const scannedEquipment = buildScannedEquipmentDetail(barcode, response.data);
       resultDiv.innerHTML = `
         <p style="color: #059669;"><i class="fas fa-check-circle"></i> 盤點成功</p>
         <p><strong>輔具品名：</strong>${equipmentName}</p>
         <p><strong>財產編號：</strong>${barcode}</p>
-        <button class="btn btn-primary" onclick="restartBarcodeScanner()">
-          <i class="fas fa-redo"></i> 繼續掃描
-        </button>
+        <div class="button-group">
+          <button class="btn btn-primary" onclick="restartBarcodeScanner()">
+            <i class="fas fa-redo"></i> 繼續掃描
+          </button>
+          <button class="btn btn-secondary" onclick="viewScannedEquipment('${barcode}')">
+            <i class="fas fa-eye"></i> 檢視輔具
+          </button>
+        </div>
       `;
+      window.__lastScannedEquipmentDetail = scannedEquipment;
       showToast('掃描盤點成功', 'success');
+      syncUpdatedEquipment(scannedEquipment);
+      loadEquipmentList();
       loadMyEquipment();
     } else {
       resultDiv.innerHTML = `
@@ -2169,6 +2178,49 @@ window.restartBarcodeScanner = function() {
   }
   startBarcodeScanner();
 };
+
+window.viewScannedEquipment = function(propertyId) {
+  const equipment = resolveEquipmentDetailForView(propertyId);
+  if (!equipment) {
+    showToast('找不到該輔具的詳細資料', 'error');
+    return;
+  }
+
+  openEquipmentDetailModal(equipment);
+};
+
+function resolveEquipmentDetailForView(propertyId) {
+  const normalizedPropertyId = normalizeIdentifier(propertyId);
+  const cachedEquipment = allEquipmentList.find(function(item) {
+    return isSameIdentifier(item.propertyId, normalizedPropertyId);
+  }) || myEquipmentList.find(function(item) {
+    return isSameIdentifier(item.propertyId, normalizedPropertyId);
+  });
+
+  if (cachedEquipment) {
+    return cachedEquipment;
+  }
+
+  if (window.__lastScannedEquipmentDetail && isSameIdentifier(window.__lastScannedEquipmentDetail.propertyId, normalizedPropertyId)) {
+    return window.__lastScannedEquipmentDetail;
+  }
+
+  return null;
+}
+
+function buildScannedEquipmentDetail(propertyId, responseData) {
+  const baseEquipment = resolveEquipmentDetailForView(propertyId) || {};
+  const inventoryDate = new Date().toISOString();
+
+  return Object.assign({}, baseEquipment, {
+    propertyId: propertyId,
+    equipmentName: responseData && responseData.equipmentName ? responseData.equipmentName : (baseEquipment.equipmentName || '未命名輔具'),
+    currentAction: responseData && responseData.currentAction ? responseData.currentAction : (baseEquipment.currentAction || ''),
+    photoUrl: responseData && responseData.photoUrl ? responseData.photoUrl : (baseEquipment.photoUrl || ''),
+    lastInventory: responseData && responseData.inventoryDate ? responseData.inventoryDate : (baseEquipment.lastInventory || inventoryDate),
+    activityAt: responseData && responseData.activityAt ? responseData.activityAt : (baseEquipment.activityAt || inventoryDate)
+  });
+}
 
 // ==========================================
 // 工具函數
