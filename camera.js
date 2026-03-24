@@ -11,6 +11,17 @@ function startCamera() {
   const captureBtn = document.getElementById('capturePhotoBtn');
   const retakeBtn = document.getElementById('retakePhotoBtn');
   const uploadBtn = document.getElementById('uploadPhotoBtn');
+  const targetInfo = document.getElementById('photoTargetInfo');
+
+  if (!currentPhotoTargetEquipment || !currentPhotoTargetEquipment.propertyId) {
+    showToast('請先選擇要拍照的輔具', 'error');
+    document.getElementById('photoModal').classList.remove('active');
+    return;
+  }
+
+  if (targetInfo) {
+    targetInfo.textContent = (currentPhotoTargetEquipment.equipmentName || '未命名輔具') + ' / ' + currentPhotoTargetEquipment.propertyId;
+  }
   
   video.style.display = 'block';
   preview.style.display = 'none';
@@ -45,6 +56,8 @@ function startCamera() {
   const closeBtn = modal.querySelector('.modal-close');
   closeBtn.onclick = function() {
     stopCamera();
+    capturedPhoto = null;
+    currentPhotoTargetEquipment = null;
     modal.classList.remove('active');
   };
 }
@@ -99,7 +112,7 @@ function uploadPhoto() {
     return;
   }
   
-  if (!currentEquipment) {
+  if (!currentPhotoTargetEquipment || !currentPhotoTargetEquipment.propertyId) {
     showToast('請先掃描輔具', 'error');
     return;
   }
@@ -107,21 +120,24 @@ function uploadPhoto() {
   showLoading(true);
   
   callAPI('uploadPhoto', {
-    equipmentId: currentEquipment.equipmentId,
-    imageData: capturedPhoto,
-    fileName: `${currentEquipment.equipmentId}_${Date.now()}.jpg`
+    propertyId: currentPhotoTargetEquipment.propertyId,
+    imageData: capturedPhoto
   }, function(response) {
     showLoading(false);
     
     if (response.success) {
       showToast('照片上傳成功！', 'success');
       document.getElementById('photoModal').classList.remove('active');
+      stopCamera();
       capturedPhoto = null;
-      
-      // 更新當前輔具的照片網址
-      if (currentEquipment) {
-        currentEquipment.photoUrl = response.data.photoUrl;
+
+      if (response.data) {
+        currentPhotoTargetEquipment = response.data;
+        if (typeof handlePhotoUploadSuccess === 'function') {
+          handlePhotoUploadSuccess(response.data);
+        }
       }
+      currentPhotoTargetEquipment = null;
     } else {
       showToast(response.message, 'error');
     }

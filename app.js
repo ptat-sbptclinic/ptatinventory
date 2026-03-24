@@ -26,6 +26,7 @@ let currentReturnDraft = null;
 let currentReturnEquipment = null;
 let currentReturnMode = 'standard';
 let currentEquipmentDetail = null;
+let currentPhotoTargetEquipment = null;
 
 // ==========================================
 // 初始化
@@ -180,6 +181,20 @@ function setupEventListeners() {
   const saveEquipmentDetailBtn = document.getElementById('saveEquipmentDetailBtn');
   if (saveEquipmentDetailBtn) {
     saveEquipmentDetailBtn.addEventListener('click', handleSaveEquipmentDetail);
+  }
+
+  const detailQuickInventoryBtn = document.getElementById('detailQuickInventoryBtn');
+  if (detailQuickInventoryBtn) {
+    detailQuickInventoryBtn.addEventListener('click', handleDetailQuickInventory);
+  }
+
+  const equipmentPhotoTrigger = document.getElementById('equipmentPhotoTrigger');
+  if (equipmentPhotoTrigger) {
+    equipmentPhotoTrigger.addEventListener('click', function() {
+      if (currentEquipmentDetail) {
+        openPhotoModalForEquipment(currentEquipmentDetail);
+      }
+    });
   }
 
   const equipmentDetailModal = document.getElementById('equipmentDetailModal');
@@ -492,11 +507,24 @@ function createEquipmentCard(equipment) {
         <span>${equipment.keeper}</span>
       </div>
     </div>
+    <div class="equipment-card-footer">
+      <button class="btn btn-success btn-small quick-inventory-btn" type="button">
+        <i class="fas fa-check"></i> 完成盤點
+      </button>
+    </div>
   `;
 
   card.addEventListener('click', function() {
     openEquipmentDetailModal(equipment);
   });
+
+  const quickButton = card.querySelector('.quick-inventory-btn');
+  if (quickButton) {
+    quickButton.addEventListener('click', function(event) {
+      event.stopPropagation();
+      window.quickInventory(equipment.propertyId);
+    });
+  }
   
   return card;
 }
@@ -614,7 +642,7 @@ function displayMyEquipmentList(equipmentList, container, countDisplay) {
 
 function createMyEquipmentCard(equipment) {
   const card = document.createElement('div');
-  card.className = 'equipment-card';
+  card.className = 'equipment-card clickable-card my-equipment-card-clickable';
   
   const area = getEquipmentArea(equipment);
   const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
@@ -649,11 +677,23 @@ function createMyEquipmentCard(equipment) {
       ` : ''}
     </div>
     <div class="equipment-card-footer">
-      <button class="btn btn-primary btn-small" onclick="quickInventory('${equipment.propertyId}')">
+      <button class="btn btn-primary btn-small quick-inventory-btn" type="button">
         <i class="fas fa-check"></i> 完成盤點
       </button>
     </div>
   `;
+
+  card.addEventListener('click', function() {
+    openEquipmentDetailModal(equipment);
+  });
+
+  const quickButton = card.querySelector('.quick-inventory-btn');
+  if (quickButton) {
+    quickButton.addEventListener('click', function(event) {
+      event.stopPropagation();
+      window.quickInventory(equipment.propertyId);
+    });
+  }
   
   return card;
 }
@@ -693,6 +733,8 @@ function renderEquipmentDetailModal() {
   const nameEl = document.getElementById('equipmentDetailName');
   const propertyIdEl = document.getElementById('equipmentDetailPropertyId');
   const gridEl = document.getElementById('equipmentDetailGrid');
+  const photoEl = document.getElementById('equipmentDetailPhoto');
+  const photoPlaceholderEl = document.getElementById('equipmentPhotoPlaceholder');
   const keeperInput = document.getElementById('detailKeeperInput');
   const locationInput = document.getElementById('detailLocationInput');
   const notesInput = document.getElementById('detailNotesInput');
@@ -702,13 +744,24 @@ function renderEquipmentDetailModal() {
   if (nameEl) nameEl.textContent = currentEquipmentDetail.equipmentName || '未命名輔具';
   if (propertyIdEl) propertyIdEl.textContent = currentEquipmentDetail.propertyId || '';
 
+  if (photoEl && photoPlaceholderEl) {
+    if (currentEquipmentDetail.photoUrl) {
+      photoEl.src = currentEquipmentDetail.photoUrl;
+      photoEl.style.display = 'block';
+      photoPlaceholderEl.style.display = 'none';
+    } else {
+      photoEl.removeAttribute('src');
+      photoEl.style.display = 'none';
+      photoPlaceholderEl.style.display = 'flex';
+    }
+  }
+
   if (gridEl) {
     const detailItems = [
-      { label: '輔具品名', value: currentEquipmentDetail.equipmentName || '-' },
-      { label: '財產編號', value: currentEquipmentDetail.propertyId || '-' },
       { label: '放置地點', value: currentEquipmentDetail.location || '-' },
       { label: '保管人', value: currentEquipmentDetail.keeper || '-' },
       { label: '目前動態', value: currentEquipmentDetail.currentStatus || '-' },
+      { label: '財產編號', value: currentEquipmentDetail.propertyId || '-' },
       { label: '輔具來源', value: currentEquipmentDetail.source || '-' },
       { label: '原始編號', value: currentEquipmentDetail.originalId || '-' },
       { label: '入庫日期', value: formatDisplayDateTime(currentEquipmentDetail.entryDate) },
@@ -767,6 +820,25 @@ function handleSaveEquipmentDetail() {
     showToast('輔具資料已更新', 'success');
     loadEquipmentList();
     loadMyEquipment();
+  });
+}
+
+function handleDetailQuickInventory() {
+  if (!currentEquipmentDetail) {
+    showToast('請先選擇輔具', 'error');
+    return;
+  }
+
+  completeEquipmentInventory(currentEquipmentDetail.propertyId, {
+    confirmMessage: '確定要將此輔具標記為已盤點嗎？',
+    onSuccess: function(response) {
+      const updatedEquipment = mergeInventoryResponseIntoEquipment(currentEquipmentDetail, response.data);
+      syncUpdatedEquipment(updatedEquipment);
+      currentEquipmentDetail = JSON.parse(JSON.stringify(updatedEquipment));
+      renderEquipmentDetailModal();
+      loadEquipmentList();
+      loadMyEquipment();
+    }
   });
 }
 
@@ -877,14 +949,23 @@ function isInventoriedThisMonth(lastInventory) {
 }
 
 window.quickInventory = function(propertyId) {
+  completeEquipmentInventory(propertyId, {
+    confirmMessage: '確定要完成此輔具的盤點嗎？'
+  });
+}
+
+function completeEquipmentInventory(propertyId, options) {
   if (!currentUser) {
     alert('請先登入');
     return;
   }
-  
-  if (confirm('確定要完成此輔具的盤點嗎？')) {
+
+  const settings = options || {};
+  const confirmMessage = settings.confirmMessage || '確定要完成此輔具的盤點嗎？';
+
+  if (confirm(confirmMessage)) {
     showLoading(true);
-    
+
     callAPI('quickInventory', {
       propertyId: propertyId,
       staffName: currentUser.name,
@@ -893,15 +974,59 @@ window.quickInventory = function(propertyId) {
       newCurrentStatus: ''
     }, function(response) {
       showLoading(false);
-      
+
       if (response.success) {
         showToast('盤點完成！', 'success');
+        if (typeof settings.onSuccess === 'function') {
+          settings.onSuccess(response);
+        }
+        loadEquipmentList();
         loadMyEquipment();
       } else {
         alert(response.message);
       }
     });
   }
+}
+
+function mergeInventoryResponseIntoEquipment(equipment, responseData) {
+  const merged = Object.assign({}, equipment || {});
+  if (!responseData) return merged;
+  merged.lastInventory = responseData.inventoryDate || merged.lastInventory;
+  merged.location = responseData.newLocation || merged.location;
+  merged.currentStatus = responseData.newCurrentStatus || responseData.oldCurrentStatus || merged.currentStatus;
+  return merged;
+}
+
+function openPhotoModalForEquipment(equipment) {
+  if (!equipment || !equipment.propertyId) {
+    showToast('找不到可拍照的輔具資料', 'error');
+    return;
+  }
+
+  currentPhotoTargetEquipment = JSON.parse(JSON.stringify(equipment));
+  const modal = document.getElementById('photoModal');
+  if (!modal) return;
+
+  const targetInfo = document.getElementById('photoTargetInfo');
+  if (targetInfo) {
+    targetInfo.textContent = (equipment.equipmentName || '未命名輔具') + ' / ' + equipment.propertyId;
+  }
+
+  modal.classList.add('active');
+  if (typeof startCamera === 'function') {
+    startCamera();
+  }
+}
+
+function handlePhotoUploadSuccess(updatedEquipment) {
+  syncUpdatedEquipment(updatedEquipment);
+  if (currentEquipmentDetail && isSameIdentifier(currentEquipmentDetail.propertyId, updatedEquipment.propertyId)) {
+    currentEquipmentDetail = JSON.parse(JSON.stringify(updatedEquipment));
+    renderEquipmentDetailModal();
+  }
+  loadEquipmentList();
+  loadMyEquipment();
 }
 
 // ==========================================

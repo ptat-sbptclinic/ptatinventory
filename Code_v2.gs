@@ -768,7 +768,7 @@ function handleGetStaffList(e) {
 // ==========================================
 
 function handleUploadPhoto(e) {
-  const propertyId = e.parameter.propertyId;
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
   const imageData = e.parameter.imageData;
   
   if (!propertyId || !imageData) {
@@ -776,13 +776,19 @@ function handleUploadPhoto(e) {
   }
   
   try {
+    const folder = getOrCreatePhotoFolder();
+    const fileName = propertyId + '.jpg';
+    const existingFiles = folder.getFilesByName(fileName);
+    while (existingFiles.hasNext()) {
+      existingFiles.next().setTrashed(true);
+    }
+
     const blob = Utilities.newBlob(
       Utilities.base64Decode(imageData.split(',')[1]),
       'image/jpeg',
-      propertyId + '_' + new Date().getTime() + '.jpg'
+      fileName
     );
-    
-    const folder = getOrCreateFolder('輔具盤點照片');
+
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
@@ -791,16 +797,19 @@ function handleUploadPhoto(e) {
     // 更新輔具清單中的照片網址
     const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
     const data = sheet.getDataRange().getValues();
+    let updatedEquipment = null;
     
     for (let i = 1; i < data.length; i++) {
-      if (data[i][EQUIPMENT_COLS.PROPERTY_ID] === propertyId) {
+      if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
         sheet.getRange(i + 1, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
         sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(new Date());
+        data[i][EQUIPMENT_COLS.PHOTO_URL] = photoUrl;
+        updatedEquipment = createEquipmentObject(data[i]);
         break;
       }
     }
     
-    return createResponse(true, '照片上傳成功', { photoUrl: photoUrl });
+    return createResponse(true, '照片上傳成功', updatedEquipment || { propertyId: propertyId, photoUrl: photoUrl });
   } catch(error) {
     return createResponse(false, '照片上傳失敗: ' + error.message);
   }
@@ -955,7 +964,7 @@ function buildMonthlyReportFileName(area, monthInfo) {
 
 function buildMonthlyLoanReportTitle(area, monthInfo) {
   const areaTitle = area ? area : '全區';
-  return areaTitle + '輔具資源中心' + monthInfo.rocYear + '年' + monthInfo.monthLabel + '月份外借流程月報表';
+  return areaTitle + '輔具資源中心' + monthInfo.rocYear + '年' + monthInfo.monthLabel + '月份外借紀錄月報表';
 }
 
 function buildMonthlyLoanReportFileName(area, monthInfo) {
@@ -1378,6 +1387,10 @@ function getOrCreateNestedFolder(folderNames) {
 
 function getOrCreateReportFolder() {
   return getOrCreateNestedFolder(['輔具盤點系統', '月報表PDF']);
+}
+
+function getOrCreatePhotoFolder() {
+  return getOrCreateNestedFolder(['輔具盤點系統', '輔具照片']);
 }
 
 function createResponse(success, message, data = null) {

@@ -275,6 +275,7 @@
           <button class="modal-close">&times;</button>
         </div>
         <div class="modal-body">
+          <div id="photoTargetInfo" class="equipment-photo-target">尚未選擇輔具</div>
           <video id="photoVideo" playsinline autoplay></video>
           <canvas id="photoCanvas" style="display: none;"></canvas>
           <img id="photoPreview" style="display: none;">
@@ -302,9 +303,14 @@
           <button id="closeEquipmentDetailBtn" class="modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="equipment-detail-summary">
-            <div id="equipmentDetailName" class="loan-selected-equipment-name">未選擇輔具</div>
-            <div id="equipmentDetailPropertyId" class="loan-selected-equipment-id"></div>
+          <div class="equipment-detail-summary equipment-photo-summary">
+            <button id="equipmentPhotoTrigger" class="equipment-photo-card" type="button">
+              <img id="equipmentDetailPhoto" class="equipment-photo-image" alt="輔具照片" style="display: none;">
+              <div id="equipmentPhotoPlaceholder" class="equipment-photo-placeholder">
+                <i class="fas fa-camera"></i>
+                <span>尚無照片（點我拍照）</span>
+              </div>
+            </button>
           </div>
 
           <div id="equipmentDetailGrid" class="equipment-detail-grid"></div>
@@ -343,6 +349,9 @@
           </div>
 
           <div class="button-group loan-flow-actions">
+            <button id="detailQuickInventoryBtn" class="btn btn-success" type="button">
+              <i class="fas fa-check"></i> 完成盤點
+            </button>
             <button id="cancelEquipmentDetailBtn" class="btn btn-secondary" type="button">關閉</button>
             <button id="saveEquipmentDetailBtn" class="btn btn-primary" type="button">
               <i class="fas fa-floppy-disk"></i> 儲存修改
