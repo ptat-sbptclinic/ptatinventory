@@ -92,6 +92,8 @@ function doPost(e) {
         return handleScanBarcode(e);
       case 'quickInventory':
         return handleQuickInventory(e);
+      case 'batchQuickInventory':
+        return handleBatchQuickInventory(e);
       case 'uploadPhoto':
         return handleUploadPhoto(e);
       case 'createLoan':
@@ -208,6 +210,89 @@ function handleQuickInventory(e) {
   if (!propertyId || !staffName) {
     return createResponse(false, '請提供必要資訊');
   }
+
+  const result = performQuickInventory({
+    propertyId: propertyId,
+    staffName: staffName,
+    photoData: photoData,
+    newLocation: newLocation,
+    newCurrentStatus: newCurrentStatus
+  });
+
+  return createResponse(result.success, result.message, result.data);
+}
+
+function handleBatchQuickInventory(e) {
+  const staffName = e.parameter.staffName;
+  const propertyIdsText = String(e.parameter.propertyIds || '');
+
+  if (!staffName || !propertyIdsText) {
+    return createResponse(false, '請提供人員與批次財產編號');
+  }
+
+  const requestedIds = propertyIdsText.split(',')
+    .map(function(item) { return normalizeIdentifier(item); })
+    .filter(function(item) { return !!item; });
+
+  const uniqueIds = requestedIds.filter(function(item, index) {
+    return requestedIds.indexOf(item) === index;
+  });
+
+  if (uniqueIds.length === 0) {
+    return createResponse(false, '沒有可處理的財產編號');
+  }
+
+  const equipmentSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  const equipmentData = equipmentSheet.getDataRange().getValues();
+  const allowedPropertyIds = {};
+
+  for (let i = 1; i < equipmentData.length; i++) {
+    const propertyId = normalizeIdentifier(equipmentData[i][EQUIPMENT_COLS.PROPERTY_ID]);
+    const keeper = String(equipmentData[i][EQUIPMENT_COLS.KEEPER] || '').trim();
+    if (propertyId && keeper === staffName) {
+      allowedPropertyIds[propertyId] = true;
+    }
+  }
+
+  const successItems = [];
+  const failedItems = [];
+
+  for (let i = 0; i < uniqueIds.length; i++) {
+    const propertyId = uniqueIds[i];
+    if (!allowedPropertyIds[propertyId]) {
+      failedItems.push({ propertyId: propertyId, message: '此輔具不屬於目前登入人員管理' });
+      continue;
+    }
+
+    const result = performQuickInventory({
+      propertyId: propertyId,
+      staffName: staffName,
+      photoData: '',
+      newLocation: '',
+      newCurrentStatus: ''
+    });
+
+    if (result.success) {
+      successItems.push(result.data);
+    } else {
+      failedItems.push({ propertyId: propertyId, message: result.message || '批次盤點失敗' });
+    }
+  }
+
+  return createResponse(successItems.length > 0, successItems.length > 0 ? '批次盤點完成' : '批次盤點失敗', {
+    successCount: successItems.length,
+    failedCount: failedItems.length,
+    successItems: successItems,
+    failedItems: failedItems
+  });
+}
+
+function performQuickInventory(params) {
+  const propertyId = normalizeIdentifier(params.propertyId);
+  const staffName = params.staffName;
+  const photoData = params.photoData || '';
+  const newLocation = params.newLocation || '';
+  const newCurrentStatus = params.newCurrentStatus || '';
   
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
   ensureEquipmentSheetColumns(sheet);
@@ -230,7 +315,11 @@ function handleQuickInventory(e) {
   }
   
   if (rowIndex === -1) {
-    return createResponse(false, '查無此財編對應的展示輔具，可能不是展示輔具或尚未建檔');
+    return {
+      success: false,
+      message: '查無此財編對應的展示輔具，可能不是展示輔具或尚未建檔',
+      data: null
+    };
   }
   
   // 自動判斷當次作為
@@ -290,12 +379,21 @@ function handleQuickInventory(e) {
     notes: ''
   });
   
-  return createResponse(true, '盤點完成', {
-    currentAction: currentAction,
-    photoUrl: photoUrl,
-    equipmentName: equipmentName,
-    propertyId: propertyId
-  });
+  return {
+    success: true,
+    message: '盤點完成',
+    data: {
+      currentAction: currentAction,
+      photoUrl: photoUrl,
+      equipmentName: equipmentName,
+      propertyId: propertyId,
+      inventoryDate: timeString,
+      activityAt: timeString,
+      newLocation: newLocation || oldLocation,
+      oldCurrentStatus: oldCurrentStatus,
+      newCurrentStatus: newCurrentStatus || oldCurrentStatus
+    }
+  };
 }
 
 // ==========================================

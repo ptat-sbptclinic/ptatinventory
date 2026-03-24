@@ -255,11 +255,32 @@
               <input type="text" id="mySearchInput" class="form-control" 
                      placeholder="搜尋財產編號、庫存編號或輔具品名...">
             </div>
+            <button id="toggleBatchInventoryBtn" class="btn btn-secondary" type="button">
+              <i class="fas fa-layer-group"></i> 批次盤點模式
+            </button>
             <div class="count-display">
               <span id="myEquipmentCount">共 0 筆</span>
             </div>
           </div>
-          
+
+          <div id="batchInventoryToolbar" class="batch-toolbar" style="display: none;">
+            <div class="batch-toolbar-info">
+              <strong id="batchInventoryCount">已選 0 筆</strong>
+              <span>只會針對目前篩選結果中的我的輔具進行批次盤點</span>
+            </div>
+            <div class="batch-toolbar-actions">
+              <button id="selectAllBatchBtn" class="btn btn-secondary btn-small" type="button">
+                <i class="fas fa-check-double"></i> 全選目前篩選結果
+              </button>
+              <button id="clearBatchSelectionBtn" class="btn btn-secondary btn-small" type="button">
+                <i class="fas fa-eraser"></i> 清除選取
+              </button>
+              <button id="submitBatchInventoryBtn" class="btn btn-primary btn-small" type="button">
+                <i class="fas fa-boxes-stacked"></i> 批次完成盤點
+              </button>
+            </div>
+          </div>
+           
           <div id="myEquipmentList" class="equipment-list">
             <div class="loading">載入中...</div>
           </div>

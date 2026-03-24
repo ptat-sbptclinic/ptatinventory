@@ -27,6 +27,8 @@ let currentReturnEquipment = null;
 let currentReturnMode = 'standard';
 let currentEquipmentDetail = null;
 let currentPhotoTargetEquipment = null;
+let isBatchInventoryMode = false;
+let selectedBatchInventoryIds = new Set();
 
 // ==========================================
 // 初始化
@@ -76,6 +78,26 @@ function setupEventListeners() {
   const mySearchInput = document.getElementById('mySearchInput');
   if (mySearchInput) {
     mySearchInput.addEventListener('input', handleMySearch);
+  }
+
+  const toggleBatchInventoryBtn = document.getElementById('toggleBatchInventoryBtn');
+  if (toggleBatchInventoryBtn) {
+    toggleBatchInventoryBtn.addEventListener('click', toggleBatchInventoryMode);
+  }
+
+  const selectAllBatchBtn = document.getElementById('selectAllBatchBtn');
+  if (selectAllBatchBtn) {
+    selectAllBatchBtn.addEventListener('click', handleSelectAllBatchInventory);
+  }
+
+  const clearBatchSelectionBtn = document.getElementById('clearBatchSelectionBtn');
+  if (clearBatchSelectionBtn) {
+    clearBatchSelectionBtn.addEventListener('click', clearBatchInventorySelection);
+  }
+
+  const submitBatchInventoryBtn = document.getElementById('submitBatchInventoryBtn');
+  if (submitBatchInventoryBtn) {
+    submitBatchInventoryBtn.addEventListener('click', handleSubmitBatchInventory);
   }
 
   setupMyTabs();
@@ -622,6 +644,8 @@ function filterMyEquipmentList(searchTerm = '') {
 }
 
 function displayMyEquipmentList(equipmentList, container, countDisplay) {
+  updateBatchInventoryToolbar(equipmentList.length);
+
   if (equipmentList.length === 0) {
     container.innerHTML = '<div class="loading">沒有符合條件的輔具</div>';
     if (countDisplay) countDisplay.textContent = '共 0 筆';
@@ -642,7 +666,8 @@ function displayMyEquipmentList(equipmentList, container, countDisplay) {
 
 function createMyEquipmentCard(equipment) {
   const card = document.createElement('div');
-  card.className = 'equipment-card clickable-card my-equipment-card-clickable';
+  const isSelected = selectedBatchInventoryIds.has(normalizeIdentifier(equipment.propertyId));
+  card.className = 'equipment-card clickable-card my-equipment-card-clickable' + (isSelected ? ' batch-card-selected' : '');
   
   const area = getEquipmentArea(equipment);
   const isInventoried = hasInventoryActivityThisMonth(equipment);
@@ -651,9 +676,12 @@ function createMyEquipmentCard(equipment) {
   
   card.innerHTML = `
     <div class="equipment-card-header">
-      <div>
-        <div class="equipment-card-title">${equipment.equipmentName}</div>
-        <div class="equipment-card-id">${equipment.propertyId}</div>
+      <div class="batch-card-header">
+        ${isBatchInventoryMode ? `<input type="checkbox" class="batch-card-checkbox" ${isSelected ? 'checked' : ''} aria-label="選取 ${equipment.propertyId}">` : ''}
+        <div class="batch-card-main">
+          <div class="equipment-card-title">${equipment.equipmentName}</div>
+          <div class="equipment-card-id">${equipment.propertyId}</div>
+        </div>
       </div>
       <div class="header-badges">
         <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
@@ -687,6 +715,17 @@ function createMyEquipmentCard(equipment) {
     openEquipmentDetailModal(equipment);
   });
 
+  const batchCheckbox = card.querySelector('.batch-card-checkbox');
+  if (batchCheckbox) {
+    batchCheckbox.addEventListener('click', function(event) {
+      event.stopPropagation();
+    });
+    batchCheckbox.addEventListener('change', function(event) {
+      event.stopPropagation();
+      toggleBatchSelection(equipment.propertyId, batchCheckbox.checked);
+    });
+  }
+
   const quickButton = card.querySelector('.quick-inventory-btn');
   if (quickButton) {
     quickButton.addEventListener('click', function(event) {
@@ -705,6 +744,125 @@ function handleMySearch(e) {
   const container = document.getElementById('myEquipmentList');
   const countDisplay = document.getElementById('myEquipmentCount');
   displayMyEquipmentList(filtered, container, countDisplay);
+}
+
+function toggleBatchInventoryMode() {
+  isBatchInventoryMode = !isBatchInventoryMode;
+  if (!isBatchInventoryMode) {
+    selectedBatchInventoryIds.clear();
+  }
+  updateBatchInventoryToolbar(filterMyEquipmentList(getCurrentMySearchTerm()).length);
+  renderMyEquipmentCurrentFilter();
+}
+
+function updateBatchInventoryToolbar(filteredCount) {
+  const toolbar = document.getElementById('batchInventoryToolbar');
+  const toggleBtn = document.getElementById('toggleBatchInventoryBtn');
+  const countEl = document.getElementById('batchInventoryCount');
+
+  if (toolbar) {
+    toolbar.style.display = isBatchInventoryMode ? 'flex' : 'none';
+  }
+
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('btn-primary', isBatchInventoryMode);
+    toggleBtn.classList.toggle('btn-secondary', !isBatchInventoryMode);
+    toggleBtn.innerHTML = isBatchInventoryMode
+      ? '<i class="fas fa-xmark"></i> 結束批次盤點'
+      : '<i class="fas fa-layer-group"></i> 批次盤點模式';
+  }
+
+  if (countEl) {
+    countEl.textContent = `已選 ${selectedBatchInventoryIds.size} 筆 / 目前篩選 ${filteredCount} 筆`;
+  }
+}
+
+function toggleBatchSelection(propertyId, isSelected) {
+  const normalizedPropertyId = normalizeIdentifier(propertyId);
+  if (isSelected) {
+    selectedBatchInventoryIds.add(normalizedPropertyId);
+  } else {
+    selectedBatchInventoryIds.delete(normalizedPropertyId);
+  }
+  updateBatchInventoryToolbar(filterMyEquipmentList(getCurrentMySearchTerm()).length);
+  renderMyEquipmentCurrentFilter();
+}
+
+function clearBatchInventorySelection() {
+  selectedBatchInventoryIds.clear();
+  updateBatchInventoryToolbar(filterMyEquipmentList(getCurrentMySearchTerm()).length);
+  renderMyEquipmentCurrentFilter();
+}
+
+function handleSelectAllBatchInventory() {
+  const filteredList = filterMyEquipmentList(getCurrentMySearchTerm());
+  filteredList.forEach(function(equipment) {
+    selectedBatchInventoryIds.add(normalizeIdentifier(equipment.propertyId));
+  });
+  updateBatchInventoryToolbar(filteredList.length);
+  renderMyEquipmentCurrentFilter();
+}
+
+function handleSubmitBatchInventory() {
+  if (!currentUser) {
+    showToast('請先登入', 'error');
+    return;
+  }
+
+  const filteredList = filterMyEquipmentList(getCurrentMySearchTerm());
+  const eligibleIds = filteredList
+    .map(function(equipment) { return normalizeIdentifier(equipment.propertyId); })
+    .filter(function(propertyId) { return selectedBatchInventoryIds.has(propertyId); });
+
+  if (eligibleIds.length === 0) {
+    showToast('請先選擇要批次盤點的輔具', 'error');
+    return;
+  }
+
+  const previewIds = eligibleIds.slice(0, 5).join('、');
+  const extraText = eligibleIds.length > 5 ? ` 等 ${eligibleIds.length} 筆` : '';
+  if (!confirm(`確定要批次完成盤點嗎？\n${previewIds}${extraText}`)) {
+    return;
+  }
+
+  callAPI('batchQuickInventory', {
+    staffName: currentUser.name,
+    propertyIds: eligibleIds.join(',')
+  }, function(response) {
+    const data = response.data || {};
+    const successItems = data.successItems || [];
+    successItems.forEach(function(item) {
+      syncUpdatedEquipment(mergeInventoryResponseIntoEquipment(resolveEquipmentDetailForView(item.propertyId) || { propertyId: item.propertyId }, item));
+    });
+
+    const failedItems = data.failedItems || [];
+    selectedBatchInventoryIds.clear();
+    updateBatchInventoryToolbar(filterMyEquipmentList(getCurrentMySearchTerm()).length);
+    renderMyEquipmentCurrentFilter();
+    loadEquipmentList();
+    loadMyEquipment();
+
+    if (response.success) {
+      const message = failedItems.length > 0
+        ? `批次盤點完成，成功 ${data.successCount || 0} 筆，失敗 ${failedItems.length} 筆`
+        : `批次盤點完成，共 ${data.successCount || 0} 筆`;
+      showToast(message, failedItems.length > 0 ? 'warning' : 'success');
+    } else {
+      showToast(response.message || '批次盤點失敗', 'error');
+    }
+  });
+}
+
+function renderMyEquipmentCurrentFilter() {
+  const container = document.getElementById('myEquipmentList');
+  const countDisplay = document.getElementById('myEquipmentCount');
+  const filtered = filterMyEquipmentList(getCurrentMySearchTerm());
+  displayMyEquipmentList(filtered, container, countDisplay);
+}
+
+function getCurrentMySearchTerm() {
+  const input = document.getElementById('mySearchInput');
+  return input ? normalizeTextSearchValue(input.value) : '';
 }
 
 function openEquipmentDetailModal(equipment) {

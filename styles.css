@@ -674,6 +674,38 @@ textarea.form-control {
   white-space: nowrap;
 }
 
+.batch-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  background: #eef2ff;
+}
+
+.batch-toolbar-info {
+  display: grid;
+  gap: 0.25rem;
+  color: #3730a3;
+}
+
+.batch-toolbar-info strong {
+  font-size: 1rem;
+}
+
+.batch-toolbar-info span {
+  font-size: 0.9rem;
+}
+
+.batch-toolbar-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .filter-group {
   flex: 1;
   min-width: 200px;
@@ -854,6 +886,29 @@ textarea.form-control {
 
 .my-equipment-card-clickable {
   cursor: pointer;
+}
+
+.batch-card-selected {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.batch-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.batch-card-checkbox {
+  margin-top: 0.2rem;
+  width: 18px;
+  height: 18px;
+  accent-color: #4f46e5;
+  flex-shrink: 0;
+}
+
+.batch-card-main {
+  flex: 1;
 }
 
 .loan-card {
@@ -1332,6 +1387,15 @@ textarea.form-control {
 
   .equipment-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .batch-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .batch-toolbar-actions {
+    flex-direction: column;
   }
 
   .equipment-action-options {
