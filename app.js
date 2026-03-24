@@ -25,6 +25,7 @@ let currentReturnLoan = null;
 let currentReturnDraft = null;
 let currentReturnEquipment = null;
 let currentReturnMode = 'standard';
+let currentEquipmentDetail = null;
 
 // ==========================================
 // 初始化
@@ -164,6 +165,30 @@ function setupEventListeners() {
   const submitLoanBtn = document.getElementById('submitLoanBtn');
   if (submitLoanBtn) {
     submitLoanBtn.addEventListener('click', handleCreateLoan);
+  }
+
+  const closeEquipmentDetailBtn = document.getElementById('closeEquipmentDetailBtn');
+  if (closeEquipmentDetailBtn) {
+    closeEquipmentDetailBtn.addEventListener('click', closeEquipmentDetailModal);
+  }
+
+  const cancelEquipmentDetailBtn = document.getElementById('cancelEquipmentDetailBtn');
+  if (cancelEquipmentDetailBtn) {
+    cancelEquipmentDetailBtn.addEventListener('click', closeEquipmentDetailModal);
+  }
+
+  const saveEquipmentDetailBtn = document.getElementById('saveEquipmentDetailBtn');
+  if (saveEquipmentDetailBtn) {
+    saveEquipmentDetailBtn.addEventListener('click', handleSaveEquipmentDetail);
+  }
+
+  const equipmentDetailModal = document.getElementById('equipmentDetailModal');
+  if (equipmentDetailModal) {
+    equipmentDetailModal.addEventListener('click', function(event) {
+      if (event.target === equipmentDetailModal) {
+        closeEquipmentDetailModal();
+      }
+    });
   }
 
   const closeReturnWorkflowBtn = document.getElementById('closeReturnWorkflowBtn');
@@ -435,7 +460,7 @@ function displayEquipmentList(equipmentList, container, countDisplay) {
 
 function createEquipmentCard(equipment) {
   const card = document.createElement('div');
-  card.className = 'equipment-card';
+  card.className = 'equipment-card clickable-card';
   
   const area = getEquipmentArea(equipment);
   const isInventoried = isInventoriedThisMonth(equipment.lastInventory);
@@ -468,12 +493,16 @@ function createEquipmentCard(equipment) {
       </div>
     </div>
   `;
+
+  card.addEventListener('click', function() {
+    openEquipmentDetailModal(equipment);
+  });
   
   return card;
 }
 
 function handleSearch(e) {
-  const searchTerm = e.target.value.trim().toLowerCase();
+  const searchTerm = normalizeTextSearchValue(e.target.value);
   
   if (!searchTerm) {
     const container = document.getElementById('equipmentList');
@@ -483,14 +512,14 @@ function handleSearch(e) {
   }
   
   const filtered = allEquipmentList.filter(equipment => {
-    return (equipment.propertyId && equipment.propertyId.toLowerCase().includes(searchTerm)) ||
-           (equipment.inventoryId && equipment.inventoryId.toLowerCase().includes(searchTerm)) ||
-           (equipment.equipmentName && equipment.equipmentName.toLowerCase().includes(searchTerm)) ||
-           (equipment.keeper && equipment.keeper.toLowerCase().includes(searchTerm)) ||
-           (equipment.category && equipment.category.toLowerCase().includes(searchTerm)) ||
-           (equipment.location && equipment.location.toLowerCase().includes(searchTerm)) ||
-           (equipment.currentStatus && equipment.currentStatus.toLowerCase().includes(searchTerm)) ||
-           (equipment.notes && equipment.notes.toLowerCase().includes(searchTerm));
+    return includesNormalized(equipment.propertyId, searchTerm) ||
+           includesNormalized(equipment.inventoryId, searchTerm) ||
+           includesNormalized(equipment.equipmentName, searchTerm) ||
+           includesNormalized(equipment.keeper, searchTerm) ||
+           includesNormalized(equipment.category, searchTerm) ||
+           includesNormalized(equipment.location, searchTerm) ||
+           includesNormalized(equipment.currentStatus, searchTerm) ||
+           includesNormalized(equipment.notes, searchTerm);
   });
   
   const container = document.getElementById('equipmentList');
@@ -558,9 +587,9 @@ function filterMyEquipmentList(searchTerm = '') {
   }
 
   return filteredList.filter(equipment => {
-    return (equipment.propertyId && equipment.propertyId.toLowerCase().includes(searchTerm)) ||
-           (equipment.inventoryId && equipment.inventoryId.toLowerCase().includes(searchTerm)) ||
-           (equipment.equipmentName && equipment.equipmentName.toLowerCase().includes(searchTerm));
+    return includesNormalized(equipment.propertyId, searchTerm) ||
+           includesNormalized(equipment.inventoryId, searchTerm) ||
+           includesNormalized(equipment.equipmentName, searchTerm);
   });
 }
 
@@ -630,12 +659,125 @@ function createMyEquipmentCard(equipment) {
 }
 
 function handleMySearch(e) {
-  const searchTerm = e.target.value.trim().toLowerCase();
+  const searchTerm = normalizeTextSearchValue(e.target.value);
   const filtered = filterMyEquipmentList(searchTerm);
 
   const container = document.getElementById('myEquipmentList');
   const countDisplay = document.getElementById('myEquipmentCount');
   displayMyEquipmentList(filtered, container, countDisplay);
+}
+
+function openEquipmentDetailModal(equipment) {
+  currentEquipmentDetail = equipment ? JSON.parse(JSON.stringify(equipment)) : null;
+
+  const modal = document.getElementById('equipmentDetailModal');
+  if (!modal || !currentEquipmentDetail) {
+    return;
+  }
+
+  renderEquipmentDetailModal();
+  modal.classList.add('active');
+}
+
+function closeEquipmentDetailModal() {
+  const modal = document.getElementById('equipmentDetailModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+  currentEquipmentDetail = null;
+}
+
+function renderEquipmentDetailModal() {
+  if (!currentEquipmentDetail) return;
+
+  const nameEl = document.getElementById('equipmentDetailName');
+  const propertyIdEl = document.getElementById('equipmentDetailPropertyId');
+  const gridEl = document.getElementById('equipmentDetailGrid');
+  const keeperInput = document.getElementById('detailKeeperInput');
+  const locationInput = document.getElementById('detailLocationInput');
+  const notesInput = document.getElementById('detailNotesInput');
+  const cleanCheckbox = document.getElementById('detailActionClean');
+  const chargeCheckbox = document.getElementById('detailActionCharge');
+
+  if (nameEl) nameEl.textContent = currentEquipmentDetail.equipmentName || '未命名輔具';
+  if (propertyIdEl) propertyIdEl.textContent = currentEquipmentDetail.propertyId || '';
+
+  if (gridEl) {
+    const detailItems = [
+      { label: '輔具品名', value: currentEquipmentDetail.equipmentName || '-' },
+      { label: '財產編號', value: currentEquipmentDetail.propertyId || '-' },
+      { label: '放置地點', value: currentEquipmentDetail.location || '-' },
+      { label: '保管人', value: currentEquipmentDetail.keeper || '-' },
+      { label: '目前動態', value: currentEquipmentDetail.currentStatus || '-' },
+      { label: '輔具來源', value: currentEquipmentDetail.source || '-' },
+      { label: '原始編號', value: currentEquipmentDetail.originalId || '-' },
+      { label: '入庫日期', value: formatDisplayDateTime(currentEquipmentDetail.entryDate) },
+      { label: '最後盤點時間', value: formatDisplayDateTime(currentEquipmentDetail.lastInventory) },
+      { label: '當次作為', value: formatCurrentActionText(currentEquipmentDetail.currentAction || '') },
+      { label: '備註', value: currentEquipmentDetail.notes || '-', fullWidth: true }
+    ];
+
+    gridEl.innerHTML = detailItems.map(function(item) {
+      return `
+        <div class="equipment-detail-item${item.fullWidth ? ' full-width' : ''}">
+          <div class="equipment-detail-label">${item.label}</div>
+          <div class="equipment-detail-value">${item.value}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (keeperInput) keeperInput.value = currentEquipmentDetail.keeper || '';
+  if (locationInput) locationInput.value = currentEquipmentDetail.location || '';
+  if (notesInput) notesInput.value = currentEquipmentDetail.notes || '';
+
+  const actionFlags = parseCurrentActionFlags(currentEquipmentDetail.currentAction || '');
+  if (cleanCheckbox) cleanCheckbox.checked = actionFlags.clean;
+  if (chargeCheckbox) chargeCheckbox.checked = actionFlags.charge;
+}
+
+function handleSaveEquipmentDetail() {
+  if (!currentEquipmentDetail) {
+    showToast('請先選擇輔具', 'error');
+    return;
+  }
+
+  const keeper = document.getElementById('detailKeeperInput').value.trim();
+  const location = document.getElementById('detailLocationInput').value.trim();
+  const notes = document.getElementById('detailNotesInput').value.trim();
+  const cleanChecked = document.getElementById('detailActionClean').checked;
+  const chargeChecked = document.getElementById('detailActionCharge').checked;
+  const currentAction = buildCurrentActionValue(cleanChecked, chargeChecked);
+
+  callAPI('updateEquipmentDetails', {
+    propertyId: currentEquipmentDetail.propertyId,
+    keeper: keeper,
+    location: location,
+    currentAction: currentAction,
+    notes: notes
+  }, function(response) {
+    if (!response.success || !response.data) {
+      showToast(response.message || '輔具資料更新失敗', 'error');
+      return;
+    }
+
+    syncUpdatedEquipment(response.data);
+    currentEquipmentDetail = JSON.parse(JSON.stringify(response.data));
+    renderEquipmentDetailModal();
+    showToast('輔具資料已更新', 'success');
+    loadEquipmentList();
+    loadMyEquipment();
+  });
+}
+
+function syncUpdatedEquipment(updatedEquipment) {
+  allEquipmentList = allEquipmentList.map(function(item) {
+    return isSameIdentifier(item.propertyId, updatedEquipment.propertyId) ? updatedEquipment : item;
+  });
+
+  myEquipmentList = myEquipmentList.map(function(item) {
+    return isSameIdentifier(item.propertyId, updatedEquipment.propertyId) ? updatedEquipment : item;
+  });
 }
 
 // ==========================================
@@ -1650,7 +1792,43 @@ function normalizeScannedCode(rawText) {
     .replace(/\s+/g, '')
     .replace(/\uFEFF/g, '');
 
-  return normalized;
+  return normalizeIdentifier(normalized);
+}
+
+function normalizeIdentifier(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function normalizeTextSearchValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function includesNormalized(value, searchTerm) {
+  return normalizeTextSearchValue(value).includes(searchTerm);
+}
+
+function isSameIdentifier(left, right) {
+  return normalizeIdentifier(left) === normalizeIdentifier(right);
+}
+
+function parseCurrentActionFlags(actionText) {
+  const text = String(actionText || '');
+  return {
+    clean: text.indexOf('◼需清潔') !== -1 || text.indexOf('■需清潔') !== -1 || (text.indexOf('需清潔') !== -1 && text.indexOf('☐需清潔') === -1 && text.indexOf('□需清潔') === -1),
+    charge: text.indexOf('◼需充電') !== -1 || text.indexOf('■需充電') !== -1 || (text.indexOf('需充電') !== -1 && text.indexOf('☐需充電') === -1 && text.indexOf('□需充電') === -1)
+  };
+}
+
+function buildCurrentActionValue(clean, charge) {
+  return `${clean ? '◼' : '☐'}需清潔${charge ? '◼' : '☐'}需充電`;
+}
+
+function formatCurrentActionText(actionText) {
+  const flags = parseCurrentActionFlags(actionText);
+  const items = [];
+  if (flags.clean) items.push('需清潔');
+  if (flags.charge) items.push('需充電');
+  return items.length > 0 ? items.join('、') : '無';
 }
 
 async function startBarcodeScanner() {

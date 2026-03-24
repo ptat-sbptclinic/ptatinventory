@@ -295,6 +295,64 @@
     </div>
 
     <!-- 外借 Modal -->
+    <div id="equipmentDetailModal" class="modal">
+      <div class="modal-content equipment-detail-modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-box-open"></i> 輔具詳細資料</h3>
+          <button id="closeEquipmentDetailBtn" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="equipment-detail-summary">
+            <div id="equipmentDetailName" class="loan-selected-equipment-name">未選擇輔具</div>
+            <div id="equipmentDetailPropertyId" class="loan-selected-equipment-id"></div>
+          </div>
+
+          <div id="equipmentDetailGrid" class="equipment-detail-grid"></div>
+
+          <div class="equipment-detail-edit-panel">
+            <h4>可編輯資料</h4>
+
+            <div class="form-group">
+              <label for="detailKeeperInput">保管人</label>
+              <input type="text" id="detailKeeperInput" class="form-control">
+            </div>
+
+            <div class="form-group">
+              <label for="detailLocationInput">放置地點</label>
+              <input type="text" id="detailLocationInput" class="form-control">
+            </div>
+
+            <div class="form-group">
+              <label>當次作為</label>
+              <div class="equipment-action-options">
+                <label class="checkbox-option">
+                  <input type="checkbox" id="detailActionClean">
+                  <span>需清潔</span>
+                </label>
+                <label class="checkbox-option">
+                  <input type="checkbox" id="detailActionCharge">
+                  <span>需充電</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="detailNotesInput">備註</label>
+              <textarea id="detailNotesInput" class="form-control" rows="4"></textarea>
+            </div>
+          </div>
+
+          <div class="button-group loan-flow-actions">
+            <button id="cancelEquipmentDetailBtn" class="btn btn-secondary" type="button">關閉</button>
+            <button id="saveEquipmentDetailBtn" class="btn btn-primary" type="button">
+              <i class="fas fa-floppy-disk"></i> 儲存修改
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 外借 Modal -->
     <div id="loanModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">

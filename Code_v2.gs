@@ -85,6 +85,8 @@ function doPost(e) {
         return handleGetEquipmentList(e);
       case 'getEquipmentByStaff':
         return handleGetEquipmentByStaff(e);
+      case 'updateEquipmentDetails':
+        return handleUpdateEquipmentDetails(e);
       case 'scanBarcode':
         return handleScanBarcode(e);
       case 'quickInventory':
@@ -166,7 +168,7 @@ function handleGetEquipmentByStaff(e) {
 }
 
 function handleScanBarcode(e) {
-  const barcode = e.parameter.barcode;
+  const barcode = normalizeIdentifier(e.parameter.barcode);
   
   if (!barcode) {
     return createResponse(false, '請提供條碼編號');
@@ -178,7 +180,7 @@ function handleScanBarcode(e) {
   // 搜尋財產編號或庫存編號
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-  if (row[EQUIPMENT_COLS.PROPERTY_ID] === barcode || row[EQUIPMENT_COLS.INVENTORY_ID] === barcode) {
+    if (isMatchingEquipmentIdentifier(row, barcode)) {
       const equipment = createEquipmentObject(row);
       equipment.rowIndex = i + 1;
       return createResponse(true, '找到輔具', equipment);
@@ -193,7 +195,7 @@ function handleScanBarcode(e) {
 // ==========================================
 
 function handleQuickInventory(e) {
-  const propertyId = e.parameter.propertyId;
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
   const staffName = e.parameter.staffName;
   const photoData = e.parameter.photoData;
   const newLocation = e.parameter.newLocation || '';
@@ -213,7 +215,7 @@ function handleQuickInventory(e) {
   
   // 找到輔具
   for (let i = 1; i < data.length; i++) {
-    if (data[i][EQUIPMENT_COLS.PROPERTY_ID] === propertyId) {
+    if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
       rowIndex = i + 1;
       equipmentName = data[i][EQUIPMENT_COLS.EQUIPMENT_NAME];
       oldLocation = data[i][EQUIPMENT_COLS.LOCATION];
@@ -295,7 +297,7 @@ function handleQuickInventory(e) {
 // ==========================================
 
 function handleCreateLoan(e) {
-  const propertyId = e.parameter.propertyId;
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
   const equipmentName = e.parameter.equipmentName;
   const borrower = e.parameter.borrower;
   const contactPerson = e.parameter.contactPerson || borrower;
@@ -331,7 +333,7 @@ function handleCreateLoan(e) {
   let equipmentRow = -1;
   
   for (let i = 1; i < equipData.length; i++) {
-    if (equipData[i][EQUIPMENT_COLS.PROPERTY_ID] === propertyId) {
+    if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
       if (equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] === '外借中') {
         return createResponse(false, '此輔具目前已外借');
       }
@@ -421,7 +423,7 @@ function handleGetLoanList(e) {
       let equipmentArea = '';
       
       for (let j = 1; j < equipData.length; j++) {
-        if (equipData[j][EQUIPMENT_COLS.PROPERTY_ID] === propertyId) {
+        if (normalizeIdentifier(equipData[j][EQUIPMENT_COLS.PROPERTY_ID]) === normalizeIdentifier(propertyId)) {
           const location = equipData[j][EQUIPMENT_COLS.LOCATION] || '';
           equipmentArea = extractArea(location);
           break;
@@ -454,6 +456,43 @@ function handleGetLoanList(e) {
   return createResponse(true, '查詢成功', loanList);
 }
 
+function handleUpdateEquipmentDetails(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  const keeper = String(e.parameter.keeper || '').trim();
+  const location = String(e.parameter.location || '').trim();
+  const currentAction = String(e.parameter.currentAction || '').trim();
+  const notes = String(e.parameter.notes || '').trim();
+
+  if (!propertyId) {
+    return createResponse(false, '請提供財產編號');
+  }
+
+  const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  const data = sheet.getDataRange().getValues();
+  let rowIndex = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (rowIndex === -1) {
+    return createResponse(false, '找不到此輔具');
+  }
+
+  const now = new Date();
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.KEEPER + 1).setValue(keeper);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.LOCATION + 1).setValue(location);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.NOTES + 1).setValue(notes);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+
+  const updatedRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+  return createResponse(true, '輔具資料更新成功', createEquipmentObject(updatedRow));
+}
+
 function handleGetActiveLoanByPropertyId(e) {
   const propertyId = resolvePropertyId(e.parameter.propertyId);
 
@@ -467,7 +506,7 @@ function handleGetActiveLoanByPropertyId(e) {
 
   for (let i = loanData.length - 1; i >= 1; i--) {
     const row = loanData[i];
-    if (row[LOAN_COLS.PROPERTY_ID] !== propertyId) continue;
+    if (normalizeIdentifier(row[LOAN_COLS.PROPERTY_ID]) !== normalizeIdentifier(propertyId)) continue;
     if (row[LOAN_COLS.STATUS] !== '外借中') continue;
 
     return createResponse(true, '查詢成功', {
@@ -615,7 +654,7 @@ function handleReturnLoan(e) {
   const equipData = equipSheet.getDataRange().getValues();
   
   for (let i = 1; i < equipData.length; i++) {
-    if (equipData[i][EQUIPMENT_COLS.PROPERTY_ID] === propertyId) {
+    if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === normalizeIdentifier(propertyId)) {
       equipSheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
       equipSheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
       break;
@@ -1161,14 +1200,14 @@ function parseDateInput(value) {
 }
 
 function resolvePropertyId(inputValue) {
-  const target = String(inputValue || '').trim();
+  const target = normalizeIdentifier(inputValue);
   if (!target) return '';
 
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][EQUIPMENT_COLS.PROPERTY_ID] === target || data[i][EQUIPMENT_COLS.INVENTORY_ID] === target) {
+    if (isMatchingEquipmentIdentifier(data[i], target)) {
       return data[i][EQUIPMENT_COLS.PROPERTY_ID];
     }
   }
@@ -1177,14 +1216,14 @@ function resolvePropertyId(inputValue) {
 }
 
 function findEquipmentByPropertyId(propertyId) {
-  const target = String(propertyId || '').trim();
+  const target = normalizeIdentifier(propertyId);
   if (!target) return null;
 
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][EQUIPMENT_COLS.PROPERTY_ID] === target) {
+    if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === target) {
       return createEquipmentObject(data[i]);
     }
   }
@@ -1347,4 +1386,14 @@ function createResponse(success, message, data = null) {
   
   return ContentService.createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function normalizeIdentifier(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function isMatchingEquipmentIdentifier(row, target) {
+  const normalizedTarget = normalizeIdentifier(target);
+  return normalizeIdentifier(row[EQUIPMENT_COLS.PROPERTY_ID]) === normalizedTarget ||
+    normalizeIdentifier(row[EQUIPMENT_COLS.INVENTORY_ID]) === normalizedTarget;
 }

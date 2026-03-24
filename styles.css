@@ -911,6 +911,10 @@ textarea.form-control {
   box-shadow: var(--shadow-lg);
 }
 
+.equipment-detail-modal-content {
+  max-width: 720px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -1015,6 +1019,72 @@ textarea.form-control {
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1rem;
+}
+
+.equipment-detail-summary,
+.equipment-detail-edit-panel {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.equipment-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.equipment-detail-item {
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  background: white;
+}
+
+.equipment-detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.equipment-detail-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  margin-bottom: 0.3rem;
+}
+
+.equipment-detail-value {
+  color: var(--gray-800);
+  word-break: break-word;
+}
+
+.equipment-detail-edit-panel h4 {
+  margin-bottom: 1rem;
+  color: var(--gray-800);
+}
+
+.equipment-action-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.checkbox-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+}
+
+.checkbox-option input {
+  width: 18px;
+  height: 18px;
 }
 
 .loan-selected-equipment-label {
@@ -1204,6 +1274,14 @@ textarea.form-control {
 
   .loan-stepper {
     grid-template-columns: 1fr;
+  }
+
+  .equipment-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-action-options {
+    flex-direction: column;
   }
 
   .loan-step-chip {
