@@ -34,7 +34,8 @@ const EQUIPMENT_COLS = {
   MARKET_PRICE: 18,      // S: 折合市價
   PURCHASE_PRICE: 19,    // T: 輔具價位
   CREATED_AT: 20,        // U: 建立日期
-  UPDATED_AT: 21         // V: 更新日期
+  UPDATED_AT: 21,        // V: 更新日期
+  ACTIVITY_AT: 22        // W: 最近作業時間
 };
 
 const LOAN_COLS = {
@@ -124,6 +125,7 @@ function handleGetEquipmentList(e) {
   const currentStatus = e.parameter.currentStatus || '';
   
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   
   let equipmentList = [];
@@ -154,6 +156,7 @@ function handleGetEquipmentByStaff(e) {
   }
   
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   
   let equipmentList = [];
@@ -175,6 +178,7 @@ function handleScanBarcode(e) {
   }
   
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   
   // 搜尋財產編號或庫存編號
@@ -206,6 +210,7 @@ function handleQuickInventory(e) {
   }
   
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   
   let rowIndex = -1;
@@ -256,6 +261,7 @@ function handleQuickInventory(e) {
   sheet.getRange(rowIndex, EQUIPMENT_COLS.LAST_INVENTORY + 1).setValue(timeString);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(timeString);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(timeString);
   
   if (photoUrl) {
     sheet.getRange(rowIndex, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
@@ -329,6 +335,7 @@ function handleCreateLoan(e) {
   
   // 檢查輔具是否可外借
   const equipSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipSheet);
   const equipData = equipSheet.getDataRange().getValues();
   let equipmentRow = -1;
   
@@ -394,6 +401,7 @@ function handleCreateLoan(e) {
   // 更新輔具狀態為「外借中」
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+  equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
   
   return createResponse(true, '外借記錄建立成功', { loanId: loanId });
 }
@@ -468,6 +476,7 @@ function handleUpdateEquipmentDetails(e) {
   }
 
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   let rowIndex = -1;
 
@@ -488,6 +497,7 @@ function handleUpdateEquipmentDetails(e) {
   sheet.getRange(rowIndex, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.NOTES + 1).setValue(notes);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
 
   const updatedRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
   return createResponse(true, '輔具資料更新成功', createEquipmentObject(updatedRow));
@@ -651,12 +661,14 @@ function handleReturnLoan(e) {
   
   // 更新輔具狀態為「展示中」
   const equipSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipSheet);
   const equipData = equipSheet.getDataRange().getValues();
   
   for (let i = 1; i < equipData.length; i++) {
     if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === normalizeIdentifier(propertyId)) {
       equipSheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
       equipSheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+      equipSheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
       break;
     }
   }
@@ -796,14 +808,19 @@ function handleUploadPhoto(e) {
     
     // 更新輔具清單中的照片網址
     const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+    ensureEquipmentSheetColumns(sheet);
     const data = sheet.getDataRange().getValues();
     let updatedEquipment = null;
     
     for (let i = 1; i < data.length; i++) {
       if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
+        const activityTime = new Date();
         sheet.getRange(i + 1, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(new Date());
+        sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(activityTime);
+        sheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(activityTime);
         data[i][EQUIPMENT_COLS.PHOTO_URL] = photoUrl;
+        data[i][EQUIPMENT_COLS.UPDATED_AT] = activityTime;
+        data[i][EQUIPMENT_COLS.ACTIVITY_AT] = activityTime;
         updatedEquipment = createEquipmentObject(data[i]);
         break;
       }
@@ -911,7 +928,9 @@ function createEquipmentObject(row) {
     photoUrl: row[EQUIPMENT_COLS.PHOTO_URL],
     marketPrice: row[EQUIPMENT_COLS.MARKET_PRICE],
     purchasePrice: row[EQUIPMENT_COLS.PURCHASE_PRICE],
-    updatedAt: row[EQUIPMENT_COLS.UPDATED_AT]
+    createdAt: row[EQUIPMENT_COLS.CREATED_AT],
+    updatedAt: row[EQUIPMENT_COLS.UPDATED_AT],
+    activityAt: row[EQUIPMENT_COLS.ACTIVITY_AT]
   };
 }
 
@@ -1230,6 +1249,7 @@ function findEquipmentByPropertyId(propertyId) {
   if (!target) return null;
 
   const sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
@@ -1297,6 +1317,12 @@ function getSheet(sheetName) {
     sheet = ss.insertSheet(sheetName);
     initializeSheet(sheet, sheetName);
   }
+
+  if (sheetName === SHEET_NAMES.EQUIPMENT) {
+    ensureEquipmentSheetColumns(sheet);
+  } else if (sheetName === SHEET_NAMES.LOANS) {
+    ensureLoanSheetColumns(sheet);
+  }
   
   return sheet;
 }
@@ -1309,7 +1335,7 @@ function initializeSheet(sheet, sheetName) {
       headers = ['財產編號', '庫存編號', '輔具品名', '輔具項目分類', '輔具項目名稱', 
                  '放置地點', '保管人', '狀態', '目前動態', '輔具來源', '捐贈者', 
                  '原始編號', '規格型號', '入庫日期', '最後盤點時間', '當次作為', 
-                 '備註', '照片網址', '折合市價', '輔具價位', '建立日期', '更新日期'];
+                 '備註', '照片網址', '折合市價', '輔具價位', '建立日期', '更新日期', '最近作業時間'];
       break;
     case SHEET_NAMES.LOANS:
       headers = ['外借編號', '財產編號', '輔具品名', '借用人/單位', '聯絡人', '聯絡電話',
@@ -1340,6 +1366,30 @@ function ensureLoanSheetColumns(sheet) {
 
   if (sheet.getLastRow() === 0) {
     initializeSheet(sheet, SHEET_NAMES.LOANS);
+    return;
+  }
+
+  const currentWidth = sheet.getLastColumn();
+  if (currentWidth >= expectedHeaders.length) {
+    return;
+  }
+
+  for (let col = currentWidth + 1; col <= expectedHeaders.length; col++) {
+    sheet.getRange(1, col).setValue(expectedHeaders[col - 1]);
+  }
+
+  sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+}
+
+function ensureEquipmentSheetColumns(sheet) {
+  const expectedHeaders = ['財產編號', '庫存編號', '輔具品名', '輔具項目分類', '輔具項目名稱',
+    '放置地點', '保管人', '狀態', '目前動態', '輔具來源', '捐贈者',
+    '原始編號', '規格型號', '入庫日期', '最後盤點時間', '當次作為',
+    '備註', '照片網址', '折合市價', '輔具價位', '建立日期', '更新日期', '最近作業時間'];
+
+  if (sheet.getLastRow() === 0) {
+    initializeSheet(sheet, SHEET_NAMES.EQUIPMENT);
     return;
   }
 

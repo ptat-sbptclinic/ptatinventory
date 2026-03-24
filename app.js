@@ -937,21 +937,15 @@ function hideReportResult() {
 function hasInventoryActivityThisMonth(equipment) {
   if (!equipment) return false;
 
-  const activityDates = [equipment.lastInventory, equipment.updatedAt]
-    .map(parsePossibleDate)
-    .filter(function(date) {
-      return date && !isNaN(date.getTime());
-    });
+  const lastInventoryDate = parsePossibleDate(equipment.lastInventory);
+  const activityAtDate = parsePossibleDate(equipment.activityAt);
+  const now = new Date();
 
-  if (activityDates.length === 0) {
-    return false;
+  if (isDateInCurrentMonth(lastInventoryDate, now)) {
+    return true;
   }
 
-  const now = new Date();
-  return activityDates.some(function(date) {
-    return date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth();
-  });
+  return isDateInCurrentMonth(activityAtDate, now);
 }
 
 function parsePossibleDate(value) {
@@ -967,6 +961,12 @@ function parsePossibleDate(value) {
 
   const fallback = new Date(String(value).replace(/-/g, '/'));
   return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function isDateInCurrentMonth(date, currentDate) {
+  return !!date && !isNaN(date.getTime()) &&
+    date.getFullYear() === currentDate.getFullYear() &&
+    date.getMonth() === currentDate.getMonth();
 }
 
 window.quickInventory = function(propertyId) {
@@ -1016,7 +1016,8 @@ function mergeInventoryResponseIntoEquipment(equipment, responseData) {
   merged.lastInventory = responseData.inventoryDate || merged.lastInventory;
   merged.location = responseData.newLocation || merged.location;
   merged.currentStatus = responseData.newCurrentStatus || responseData.oldCurrentStatus || merged.currentStatus;
-  merged.updatedAt = responseData.inventoryDate || responseData.updatedAt || merged.updatedAt;
+  merged.activityAt = responseData.inventoryDate || responseData.activityAt || merged.activityAt;
+  merged.updatedAt = responseData.updatedAt || merged.updatedAt;
   return merged;
 }
 
