@@ -746,11 +746,16 @@ function renderEquipmentDetailModal() {
 
   if (photoEl && photoPlaceholderEl) {
     if (currentEquipmentDetail.photoUrl) {
-      photoEl.src = currentEquipmentDetail.photoUrl;
+      photoEl.src = getPhotoDisplayUrl(currentEquipmentDetail.photoUrl);
+      photoEl.onerror = function() {
+        photoEl.style.display = 'none';
+        photoPlaceholderEl.style.display = 'flex';
+      };
       photoEl.style.display = 'block';
       photoPlaceholderEl.style.display = 'none';
     } else {
       photoEl.removeAttribute('src');
+      photoEl.onerror = null;
       photoEl.style.display = 'none';
       photoPlaceholderEl.style.display = 'flex';
     }
@@ -1973,6 +1978,23 @@ function formatCurrentActionText(actionText) {
   if (flags.clean) items.push('需清潔');
   if (flags.charge) items.push('需充電');
   return items.length > 0 ? items.join('、') : '無';
+}
+
+function getPhotoDisplayUrl(photoUrl) {
+  const rawUrl = String(photoUrl || '').trim();
+  if (!rawUrl) return '';
+
+  const fileMatch = rawUrl.match(/\/file\/d\/([^/]+)/);
+  if (fileMatch) {
+    return `https://drive.google.com/thumbnail?id=${fileMatch[1]}&sz=w1600`;
+  }
+
+  const openMatch = rawUrl.match(/[?&]id=([^&]+)/);
+  if (openMatch) {
+    return `https://drive.google.com/thumbnail?id=${openMatch[1]}&sz=w1600`;
+  }
+
+  return rawUrl;
 }
 
 async function startBarcodeScanner() {
