@@ -1008,6 +1008,11 @@ function openPhotoModalForEquipment(equipment) {
   const modal = document.getElementById('photoModal');
   if (!modal) return;
 
+  const detailModal = document.getElementById('equipmentDetailModal');
+  if (detailModal) {
+    detailModal.classList.remove('active');
+  }
+
   const targetInfo = document.getElementById('photoTargetInfo');
   if (targetInfo) {
     targetInfo.textContent = (equipment.equipmentName || '未命名輔具') + ' / ' + equipment.propertyId;
@@ -1025,8 +1030,22 @@ function handlePhotoUploadSuccess(updatedEquipment) {
     currentEquipmentDetail = JSON.parse(JSON.stringify(updatedEquipment));
     renderEquipmentDetailModal();
   }
+
+  const detailModal = document.getElementById('equipmentDetailModal');
+  if (detailModal && currentEquipmentDetail) {
+    detailModal.classList.add('active');
+  }
+
   loadEquipmentList();
   loadMyEquipment();
+}
+
+function restoreEquipmentDetailModalAfterPhoto() {
+  const detailModal = document.getElementById('equipmentDetailModal');
+  if (detailModal && currentEquipmentDetail) {
+    renderEquipmentDetailModal();
+    detailModal.classList.add('active');
+  }
 }
 
 // ==========================================

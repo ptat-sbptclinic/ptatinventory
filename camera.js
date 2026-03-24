@@ -59,6 +59,9 @@ function startCamera() {
     capturedPhoto = null;
     currentPhotoTargetEquipment = null;
     modal.classList.remove('active');
+    if (typeof restoreEquipmentDetailModalAfterPhoto === 'function') {
+      restoreEquipmentDetailModalAfterPhoto();
+    }
   };
 }
 
