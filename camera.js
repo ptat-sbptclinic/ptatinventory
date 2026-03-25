@@ -22,6 +22,24 @@ function startCamera() {
   if (targetInfo) {
     targetInfo.textContent = (currentPhotoTargetEquipment.equipmentName || '未命名輔具') + ' / ' + currentPhotoTargetEquipment.propertyId;
   }
+
+  if (typeof stopBarcodeScanner === 'function') {
+    stopBarcodeScanner();
+  }
+  if (typeof stopLoanBarcodeScanner === 'function') {
+    stopLoanBarcodeScanner();
+  }
+  if (typeof stopReturnBarcodeScanner === 'function') {
+    stopReturnBarcodeScanner();
+  }
+
+  video.setAttribute('playsinline', 'true');
+  video.setAttribute('webkit-playsinline', 'true');
+  video.setAttribute('autoplay', 'true');
+  video.setAttribute('muted', 'true');
+  video.playsInline = true;
+  video.autoplay = true;
+  video.muted = true;
   
   video.style.display = 'block';
   preview.style.display = 'none';
@@ -30,6 +48,7 @@ function startCamera() {
   uploadBtn.style.display = 'none';
   
   navigator.mediaDevices.getUserMedia({ 
+    audio: false,
     video: { 
       facingMode: 'environment',
       width: { ideal: 1920 },
@@ -39,7 +58,12 @@ function startCamera() {
   .then(function(stream) {
     cameraStream = stream;
     video.srcObject = stream;
-    video.play();
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(function(error) {
+        console.warn('照片預覽播放失敗:', error);
+      });
+    }
   })
   .catch(function(error) {
     console.error('相機啟動失敗:', error);

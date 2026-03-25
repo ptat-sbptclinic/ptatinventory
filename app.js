@@ -30,6 +30,127 @@ let currentPhotoTargetEquipment = null;
 let isBatchInventoryMode = false;
 let selectedBatchInventoryIds = new Set();
 
+function isAppleMobileDevice() {
+  const userAgent = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const touchPoints = navigator.maxTouchPoints || 0;
+  return /iPhone|iPad|iPod/i.test(userAgent) || (platform === 'MacIntel' && touchPoints > 1);
+}
+
+function buildScannerConfig() {
+  return {
+    fps: isAppleMobileDevice() ? 12 : 10,
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const width = Math.max(220, Math.min(Math.floor(viewfinderWidth * 0.88), 360));
+      const height = Math.max(100, Math.min(Math.floor(viewfinderHeight * 0.28), 160));
+      return {
+        width: width,
+        height: height
+      };
+    },
+    disableFlip: isAppleMobileDevice(),
+    rememberLastUsedCamera: true
+  };
+}
+
+function optimizeScannerVideo(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const video = container.querySelector('video');
+  if (!video) return;
+
+  video.setAttribute('playsinline', 'true');
+  video.setAttribute('webkit-playsinline', 'true');
+  video.setAttribute('autoplay', 'true');
+  video.setAttribute('muted', 'true');
+  video.playsInline = true;
+  video.autoplay = true;
+  video.muted = true;
+
+  const playPromise = video.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(function(error) {
+      console.warn('重新播放掃描預覽失敗:', error);
+    });
+  }
+}
+
+async function resolvePreferredRearCamera() {
+  if (!isAppleMobileDevice() || typeof Html5Qrcode === 'undefined' || typeof Html5Qrcode.getCameras !== 'function') {
+    return null;
+  }
+
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (!Array.isArray(cameras) || cameras.length === 0) {
+      return null;
+    }
+
+    const rearCamera = cameras.find(function(camera) {
+      return /back|rear|environment|wide/i.test(camera.label || '');
+    }) || cameras[cameras.length - 1];
+
+    return rearCamera && rearCamera.id ? rearCamera.id : null;
+  } catch (error) {
+    console.warn('取得後鏡頭列表失敗:', error);
+    return null;
+  }
+}
+
+async function prepareCameraForScanner(activeScannerKey) {
+  if (typeof stopCamera === 'function') {
+    stopCamera();
+  }
+
+  const stopTasks = [];
+  if (activeScannerKey !== 'inventory' && isScannerRunning) {
+    stopTasks.push(stopBarcodeScanner());
+  }
+  if (activeScannerKey !== 'loan' && isLoanScannerRunning) {
+    stopTasks.push(stopLoanBarcodeScanner());
+  }
+  if (activeScannerKey !== 'return' && isReturnScannerRunning) {
+    stopTasks.push(stopReturnBarcodeScanner());
+  }
+
+  if (stopTasks.length > 0) {
+    await Promise.all(stopTasks);
+  }
+}
+
+async function startScannerWithFallback(scannerInstance, containerId, onSuccess) {
+  const scanConfig = buildScannerConfig();
+  const cameraCandidates = [
+    { facingMode: { exact: 'environment' } },
+    { facingMode: 'environment' }
+  ];
+
+  const preferredRearCamera = await resolvePreferredRearCamera();
+  if (preferredRearCamera) {
+    cameraCandidates.push(preferredRearCamera);
+  }
+
+  let lastError = null;
+
+  for (let i = 0; i < cameraCandidates.length; i++) {
+    try {
+      await scannerInstance.start(
+        cameraCandidates[i],
+        scanConfig,
+        onSuccess,
+        function() {}
+      );
+      optimizeScannerVideo(containerId);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('scanner_start_failed');
+}
+
 // ==========================================
 // 初始化
 // ==========================================
@@ -1518,6 +1639,8 @@ async function startLoanBarcodeScanner() {
     loanQrCode = new Html5Qrcode('loanQrReader');
   }
 
+  await prepareCameraForScanner('loan');
+
   setLoanWorkflowStep('scan');
   container.style.display = 'block';
   startBtn.style.display = 'none';
@@ -1527,35 +1650,13 @@ async function startLoanBarcodeScanner() {
     resultDiv.innerHTML = '';
   }
 
-  const scanConfig = {
-    fps: 10,
-    qrbox: { width: 260, height: 120 },
-    aspectRatio: 1.777,
-    rememberLastUsedCamera: true
-  };
-
   try {
-    await loanQrCode.start(
-      { facingMode: { exact: 'environment' } },
-      scanConfig,
-      onLoanScanSuccess,
-      () => {}
-    );
+    await startScannerWithFallback(loanQrCode, 'loanScannerContainer', onLoanScanSuccess);
     isLoanScannerRunning = true;
-  } catch (exactError) {
-    try {
-      await loanQrCode.start(
-        { facingMode: 'environment' },
-        scanConfig,
-        onLoanScanSuccess,
-        () => {}
-      );
-      isLoanScannerRunning = true;
-    } catch (error) {
-      console.error('啟動外借掃描失敗:', error);
-      showToast('無法啟動相機掃描，請確認相機權限', 'error');
-      stopLoanBarcodeScanner();
-    }
+  } catch (error) {
+    console.error('啟動外借掃描失敗:', error);
+    showToast('無法啟動相機掃描，請確認相機權限', 'error');
+    stopLoanBarcodeScanner();
   }
 }
 
@@ -1856,6 +1957,8 @@ async function startReturnBarcodeScanner() {
     returnQrCode = new Html5Qrcode('returnQrReader');
   }
 
+  await prepareCameraForScanner('return');
+
   setReturnWorkflowStep('lookup');
   container.style.display = 'block';
   startBtn.style.display = 'inline-flex';
@@ -1865,37 +1968,14 @@ async function startReturnBarcodeScanner() {
     resultDiv.innerHTML = '';
   }
 
-  const scanConfig = {
-    fps: 10,
-    qrbox: { width: 260, height: 120 },
-    aspectRatio: 1.777,
-    rememberLastUsedCamera: true
-  };
-
   try {
-    await returnQrCode.start(
-      { facingMode: { exact: 'environment' } },
-      scanConfig,
-      onReturnScanSuccess,
-      () => {}
-    );
+    await startScannerWithFallback(returnQrCode, 'returnScannerContainer', onReturnScanSuccess);
     isReturnScannerRunning = true;
     if (startBtn) startBtn.style.display = 'none';
-  } catch (exactError) {
-    try {
-      await returnQrCode.start(
-        { facingMode: 'environment' },
-        scanConfig,
-        onReturnScanSuccess,
-        () => {}
-      );
-      isReturnScannerRunning = true;
-      if (startBtn) startBtn.style.display = 'none';
-    } catch (error) {
-      console.error('啟動歸還掃描失敗:', error);
-      showToast('無法啟動相機掃描，請確認相機權限', 'error');
-      stopReturnBarcodeScanner();
-    }
+  } catch (error) {
+    console.error('啟動歸還掃描失敗:', error);
+    showToast('無法啟動相機掃描，請確認相機權限', 'error');
+    stopReturnBarcodeScanner();
   }
 }
 
@@ -2191,6 +2271,10 @@ async function startBarcodeScanner() {
     return;
   }
 
+  if (isScannerRunning) {
+    return;
+  }
+
   const container = document.getElementById('scannerContainer');
   const startBtn = document.getElementById('startScanBtn');
   const stopBtn = document.getElementById('stopScanBtn');
@@ -2205,6 +2289,8 @@ async function startBarcodeScanner() {
     html5QrCode = new Html5Qrcode('html5QrReader');
   }
 
+  await prepareCameraForScanner('inventory');
+
   container.style.display = 'block';
   startBtn.style.display = 'none';
   stopBtn.style.display = 'inline-flex';
@@ -2213,35 +2299,13 @@ async function startBarcodeScanner() {
     resultDiv.innerHTML = '';
   }
 
-  const scanConfig = {
-    fps: 10,
-    qrbox: { width: 260, height: 120 },
-    aspectRatio: 1.777,
-    rememberLastUsedCamera: true
-  };
-
   try {
-    await html5QrCode.start(
-      { facingMode: { exact: 'environment' } },
-      scanConfig,
-      onScanSuccess,
-      () => {}
-    );
+    await startScannerWithFallback(html5QrCode, 'scannerContainer', onScanSuccess);
     isScannerRunning = true;
-  } catch (exactError) {
-    try {
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        scanConfig,
-        onScanSuccess,
-        () => {}
-      );
-      isScannerRunning = true;
-    } catch (error) {
-      console.error('啟動掃描失敗:', error);
-      showToast('無法啟動相機掃描，請確認相機權限', 'error');
-      stopBarcodeScanner();
-    }
+  } catch (error) {
+    console.error('啟動掃描失敗:', error);
+    showToast('無法啟動相機掃描，請確認相機權限', 'error');
+    stopBarcodeScanner();
   }
 }
 
