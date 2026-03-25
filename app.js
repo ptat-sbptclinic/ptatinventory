@@ -29,6 +29,11 @@ let currentEquipmentDetail = null;
 let currentPhotoTargetEquipment = null;
 let isBatchInventoryMode = false;
 let selectedBatchInventoryIds = new Set();
+let scannerAssistZoomState = {
+  inventory: '1',
+  loan: '1',
+  return: '1'
+};
 
 function isAppleMobileDevice() {
   const userAgent = navigator.userAgent || '';
@@ -151,6 +156,263 @@ async function startScannerWithFallback(scannerInstance, containerId, onSuccess)
   throw lastError || new Error('scanner_start_failed');
 }
 
+const SCANNER_ASSIST_CONFIG = {
+  inventory: {
+    assistControlsId: 'scanAssistControls',
+    refocusButtonId: 'refocusScanBtn',
+    zoomSelectId: 'scanZoomSelect',
+    containerId: 'scannerContainer',
+    restart: function() {
+      return startBarcodeScanner();
+    }
+  },
+  loan: {
+    assistControlsId: 'loanAssistControls',
+    refocusButtonId: 'refocusLoanScanBtn',
+    zoomSelectId: 'loanZoomSelect',
+    containerId: 'loanScannerContainer',
+    restart: function() {
+      return startLoanBarcodeScanner();
+    }
+  },
+  return: {
+    assistControlsId: 'returnAssistControls',
+    refocusButtonId: 'refocusReturnScanBtn',
+    zoomSelectId: 'returnZoomSelect',
+    containerId: 'returnScannerContainer',
+    restart: function() {
+      return startReturnBarcodeScanner();
+    }
+  }
+};
+
+function getScannerAssistConfig(scannerKey) {
+  return SCANNER_ASSIST_CONFIG[scannerKey] || null;
+}
+
+function getScannerInstanceByKey(scannerKey) {
+  if (scannerKey === 'inventory') return html5QrCode;
+  if (scannerKey === 'loan') return loanQrCode;
+  if (scannerKey === 'return') return returnQrCode;
+  return null;
+}
+
+function getScannerTrack(scannerKey) {
+  const config = getScannerAssistConfig(scannerKey);
+  if (!config) return null;
+
+  const container = document.getElementById(config.containerId);
+  if (!container) return null;
+
+  const video = container.querySelector('video');
+  if (!video || !video.srcObject || typeof video.srcObject.getVideoTracks !== 'function') {
+    return null;
+  }
+
+  const tracks = video.srcObject.getVideoTracks();
+  return Array.isArray(tracks) && tracks.length > 0 ? tracks[0] : null;
+}
+
+function getScannerCapabilities(scannerKey) {
+  const track = getScannerTrack(scannerKey);
+  if (!track || typeof track.getCapabilities !== 'function') {
+    return null;
+  }
+
+  try {
+    return track.getCapabilities();
+  } catch (error) {
+    console.warn('讀取相機能力失敗:', error);
+    return null;
+  }
+}
+
+function updateScannerZoomOptions(scannerKey, capabilities) {
+  const config = getScannerAssistConfig(scannerKey);
+  if (!config) return;
+
+  const zoomSelect = document.getElementById(config.zoomSelectId);
+  if (!zoomSelect) return;
+
+  const supportsZoom = capabilities && typeof capabilities.zoom === 'object';
+  zoomSelect.innerHTML = '';
+
+  if (!supportsZoom) {
+    zoomSelect.disabled = true;
+    zoomSelect.innerHTML = '<option value="1">1.0x</option>';
+    return;
+  }
+
+  const minZoom = Math.max(1, capabilities.zoom.min || 1);
+  const maxZoom = capabilities.zoom.max || minZoom;
+  const preferredOptions = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const availableOptions = preferredOptions.filter(function(value) {
+    return value >= minZoom && value <= maxZoom;
+  });
+
+  if (availableOptions.length === 0) {
+    availableOptions.push(minZoom);
+  }
+
+  availableOptions.forEach(function(value) {
+    const option = document.createElement('option');
+    option.value = String(value);
+    option.textContent = value.toFixed(2).replace(/\.00$/, '.0').replace(/0$/, '') + 'x';
+    zoomSelect.appendChild(option);
+  });
+
+  zoomSelect.disabled = false;
+  const desiredZoom = scannerAssistZoomState[scannerKey] || '1';
+  zoomSelect.value = Array.from(zoomSelect.options).some(function(option) {
+    return option.value === desiredZoom;
+  }) ? desiredZoom : zoomSelect.options[0].value;
+  scannerAssistZoomState[scannerKey] = zoomSelect.value;
+}
+
+function setScannerAssistVisibility(scannerKey, visible) {
+  const config = getScannerAssistConfig(scannerKey);
+  if (!config) return;
+
+  const controls = document.getElementById(config.assistControlsId);
+  if (controls) {
+    controls.style.display = visible ? 'flex' : 'none';
+  }
+}
+
+async function applyScannerZoom(scannerKey, zoomValue) {
+  const track = getScannerTrack(scannerKey);
+  const capabilities = getScannerCapabilities(scannerKey);
+  if (!track || !capabilities || typeof capabilities.zoom !== 'object' || typeof track.applyConstraints !== 'function') {
+    return false;
+  }
+
+  const nextZoom = Number(zoomValue);
+  const minZoom = capabilities.zoom.min || 1;
+  const maxZoom = capabilities.zoom.max || nextZoom;
+  const safeZoom = Math.min(maxZoom, Math.max(minZoom, nextZoom));
+
+  try {
+    await track.applyConstraints({
+      advanced: [{ zoom: safeZoom }]
+    });
+    scannerAssistZoomState[scannerKey] = String(safeZoom);
+    return true;
+  } catch (error) {
+    console.warn('調整相機倍率失敗:', error);
+    return false;
+  }
+}
+
+async function refreshScannerAssistControls(scannerKey) {
+  const config = getScannerAssistConfig(scannerKey);
+  if (!config) return;
+
+  const capabilities = getScannerCapabilities(scannerKey);
+  setScannerAssistVisibility(scannerKey, true);
+  updateScannerZoomOptions(scannerKey, capabilities);
+
+  const hintId = config.assistControlsId + 'Hint';
+  let hint = document.getElementById(hintId);
+  const controls = document.getElementById(config.assistControlsId);
+  if (controls) {
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id = hintId;
+      hint.className = 'scanner-assist-hint';
+      controls.appendChild(hint);
+    }
+    hint.textContent = capabilities && capabilities.zoom ? '掃描模糊時可先點重新對焦，也可稍微拉遠後再靠近。' : '掃描模糊時可先點重新對焦，並稍微拉遠條碼後再靠近。';
+  }
+
+  if ((scannerAssistZoomState[scannerKey] || '1') !== '1') {
+    await applyScannerZoom(scannerKey, scannerAssistZoomState[scannerKey]);
+  }
+}
+
+async function initializeScannerAssist(scannerKey) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise(function(resolve) {
+      setTimeout(resolve, 150);
+    });
+
+    const track = getScannerTrack(scannerKey);
+    if (track) {
+      await refreshScannerAssistControls(scannerKey);
+      return;
+    }
+  }
+
+  setScannerAssistVisibility(scannerKey, true);
+}
+
+async function refocusScanner(scannerKey) {
+  const track = getScannerTrack(scannerKey);
+  const capabilities = getScannerCapabilities(scannerKey);
+
+  if (track && capabilities && Array.isArray(capabilities.focusMode) && typeof track.applyConstraints === 'function') {
+    const focusModes = capabilities.focusMode;
+    const preferredFocusMode = focusModes.includes('continuous') ? 'continuous' : (focusModes.includes('single-shot') ? 'single-shot' : focusModes[0]);
+
+    if (preferredFocusMode) {
+      try {
+        await track.applyConstraints({
+          advanced: [{ focusMode: preferredFocusMode }]
+        });
+        if (preferredFocusMode === 'single-shot') {
+          await new Promise(function(resolve) {
+            setTimeout(resolve, 300);
+          });
+        }
+        showToast('已嘗試重新對焦', 'success');
+        return;
+      } catch (error) {
+        console.warn('重新對焦失敗，改為重啟相機:', error);
+      }
+    }
+  }
+
+  await restartScannerForFocus(scannerKey);
+  showToast('已重新啟動相機，請再試一次', 'success');
+}
+
+async function restartScannerForFocus(scannerKey) {
+  const config = getScannerAssistConfig(scannerKey);
+  if (!config || typeof config.restart !== 'function') {
+    return;
+  }
+
+  if (scannerKey === 'inventory') {
+    await stopBarcodeScanner();
+  } else if (scannerKey === 'loan') {
+    await stopLoanBarcodeScanner();
+  } else if (scannerKey === 'return') {
+    await stopReturnBarcodeScanner();
+  }
+
+  await config.restart();
+}
+
+function setupScannerAssistEventListeners() {
+  Object.keys(SCANNER_ASSIST_CONFIG).forEach(function(scannerKey) {
+    const config = SCANNER_ASSIST_CONFIG[scannerKey];
+    const refocusButton = document.getElementById(config.refocusButtonId);
+    const zoomSelect = document.getElementById(config.zoomSelectId);
+
+    if (refocusButton) {
+      refocusButton.addEventListener('click', function() {
+        refocusScanner(scannerKey);
+      });
+    }
+
+    if (zoomSelect) {
+      zoomSelect.addEventListener('change', function() {
+        scannerAssistZoomState[scannerKey] = this.value;
+        applyScannerZoom(scannerKey, this.value);
+      });
+    }
+  });
+}
+
 // ==========================================
 // 初始化
 // ==========================================
@@ -189,6 +451,7 @@ function initializeManualLink() {
 function setupEventListeners() {
   document.getElementById('loginBtn').addEventListener('click', handleLogin);
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  setupScannerAssistEventListeners();
   
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', function() {
@@ -1653,6 +1916,7 @@ async function startLoanBarcodeScanner() {
   try {
     await startScannerWithFallback(loanQrCode, 'loanScannerContainer', onLoanScanSuccess);
     isLoanScannerRunning = true;
+    await initializeScannerAssist('loan');
   } catch (error) {
     console.error('啟動外借掃描失敗:', error);
     showToast('無法啟動相機掃描，請確認相機權限', 'error');
@@ -1679,6 +1943,7 @@ async function stopLoanBarcodeScanner() {
   lastLoanScannedCode = '';
 
   if (container) container.style.display = 'none';
+  setScannerAssistVisibility('loan', false);
   if (startBtn) startBtn.style.display = 'inline-flex';
   if (stopBtn) stopBtn.style.display = 'none';
 }
@@ -1971,6 +2236,7 @@ async function startReturnBarcodeScanner() {
   try {
     await startScannerWithFallback(returnQrCode, 'returnScannerContainer', onReturnScanSuccess);
     isReturnScannerRunning = true;
+    await initializeScannerAssist('return');
     if (startBtn) startBtn.style.display = 'none';
   } catch (error) {
     console.error('啟動歸還掃描失敗:', error);
@@ -1998,6 +2264,7 @@ async function stopReturnBarcodeScanner() {
   lastReturnScannedCode = '';
 
   if (container) container.style.display = 'none';
+  setScannerAssistVisibility('return', false);
   if (startBtn) startBtn.style.display = 'inline-flex';
   if (stopBtn) stopBtn.style.display = 'none';
 }
@@ -2302,6 +2569,7 @@ async function startBarcodeScanner() {
   try {
     await startScannerWithFallback(html5QrCode, 'scannerContainer', onScanSuccess);
     isScannerRunning = true;
+    await initializeScannerAssist('inventory');
   } catch (error) {
     console.error('啟動掃描失敗:', error);
     showToast('無法啟動相機掃描，請確認相機權限', 'error');
@@ -2328,6 +2596,7 @@ async function stopBarcodeScanner() {
   lastScannedCode = '';
 
   if (container) container.style.display = 'none';
+  setScannerAssistVisibility('inventory', false);
   if (startBtn) startBtn.style.display = 'inline-flex';
   if (stopBtn) stopBtn.style.display = 'none';
 }

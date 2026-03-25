@@ -94,7 +94,19 @@
           <div id="scannerContainer" class="scanner-container" style="display: none;">
             <div id="html5QrReader"></div>
           </div>
-          
+
+          <div id="scanAssistControls" class="scanner-assist-controls" style="display: none;">
+            <button id="refocusScanBtn" class="btn btn-secondary" type="button">
+              <i class="fas fa-bullseye"></i> 重新對焦
+            </button>
+            <label class="scanner-zoom-control" for="scanZoomSelect">
+              <span>放大倍率</span>
+              <select id="scanZoomSelect" class="form-control">
+                <option value="1">1.0x</option>
+              </select>
+            </label>
+          </div>
+           
           <div class="scan-controls">
             <button id="startScanBtn" class="btn btn-primary">
               <i class="fas fa-camera"></i> 開始掃描
@@ -425,6 +437,18 @@
               <div id="loanQrReader"></div>
             </div>
 
+            <div id="loanAssistControls" class="scanner-assist-controls" style="display: none;">
+              <button id="refocusLoanScanBtn" class="btn btn-secondary" type="button">
+                <i class="fas fa-bullseye"></i> 重新對焦
+              </button>
+              <label class="scanner-zoom-control" for="loanZoomSelect">
+                <span>放大倍率</span>
+                <select id="loanZoomSelect" class="form-control">
+                  <option value="1">1.0x</option>
+                </select>
+              </label>
+            </div>
+
             <div class="scan-controls">
               <button id="startLoanScanBtn" class="btn btn-primary">
                 <i class="fas fa-camera"></i> 開始掃描
@@ -532,6 +556,18 @@
 
             <div id="returnScannerContainer" class="scanner-container" style="display: none;">
               <div id="returnQrReader"></div>
+            </div>
+
+            <div id="returnAssistControls" class="scanner-assist-controls" style="display: none;">
+              <button id="refocusReturnScanBtn" class="btn btn-secondary" type="button">
+                <i class="fas fa-bullseye"></i> 重新對焦
+              </button>
+              <label class="scanner-zoom-control" for="returnZoomSelect">
+                <span>放大倍率</span>
+                <select id="returnZoomSelect" class="form-control">
+                  <option value="1">1.0x</option>
+                </select>
+              </label>
             </div>
 
             <div class="scan-controls">
