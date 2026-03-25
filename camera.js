@@ -148,7 +148,8 @@ function uploadPhoto() {
   
   callAPI('uploadPhoto', {
     propertyId: currentPhotoTargetEquipment.propertyId,
-    imageData: capturedPhoto
+    imageData: capturedPhoto,
+    staffName: currentUser && currentUser.name ? currentUser.name : ''
   }, function(response) {
     showLoading(false);
     

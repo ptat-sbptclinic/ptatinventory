@@ -880,6 +880,7 @@ function handleGetStaffList(e) {
 function handleUploadPhoto(e) {
   const propertyId = normalizeIdentifier(e.parameter.propertyId);
   const imageData = e.parameter.imageData;
+  const staffName = String(e.parameter.staffName || '').trim();
   
   if (!propertyId || !imageData) {
     return createResponse(false, '請提供財產編號和照片');
@@ -913,12 +914,40 @@ function handleUploadPhoto(e) {
     for (let i = 1; i < data.length; i++) {
       if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
         const activityTime = new Date();
+        const timeString = formatDateTime(activityTime);
+        const equipmentName = data[i][EQUIPMENT_COLS.EQUIPMENT_NAME] || '';
+        const currentAction = determineCurrentAction(equipmentName);
+        const oldLocation = data[i][EQUIPMENT_COLS.LOCATION] || '';
+        const oldCurrentStatus = data[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
+
         sheet.getRange(i + 1, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(activityTime);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(activityTime);
+        sheet.getRange(i + 1, EQUIPMENT_COLS.LAST_INVENTORY + 1).setValue(timeString);
+        sheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
+        sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(timeString);
+        sheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(timeString);
+
         data[i][EQUIPMENT_COLS.PHOTO_URL] = photoUrl;
-        data[i][EQUIPMENT_COLS.UPDATED_AT] = activityTime;
-        data[i][EQUIPMENT_COLS.ACTIVITY_AT] = activityTime;
+        data[i][EQUIPMENT_COLS.LAST_INVENTORY] = timeString;
+        data[i][EQUIPMENT_COLS.CURRENT_ACTION] = currentAction;
+        data[i][EQUIPMENT_COLS.UPDATED_AT] = timeString;
+        data[i][EQUIPMENT_COLS.ACTIVITY_AT] = timeString;
+
+        if (staffName) {
+          addInventoryLog({
+            propertyId: propertyId,
+            staffName: staffName,
+            method: '拍照',
+            oldLocation: oldLocation,
+            newLocation: oldLocation,
+            oldCurrentStatus: oldCurrentStatus,
+            newCurrentStatus: oldCurrentStatus,
+            currentAction: currentAction,
+            hasPhoto: '是',
+            photoUrl: photoUrl,
+            notes: '拍照上傳時同步標記為已盤點'
+          });
+        }
+
         updatedEquipment = createEquipmentObject(data[i]);
         break;
       }
