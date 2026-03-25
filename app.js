@@ -43,17 +43,24 @@ function isAppleMobileDevice() {
 }
 
 function buildScannerConfig() {
+  const isAppleDevice = isAppleMobileDevice();
   return {
-    fps: isAppleMobileDevice() ? 12 : 10,
+    fps: isAppleDevice ? 10 : 10,
     qrbox: function(viewfinderWidth, viewfinderHeight) {
-      const width = Math.max(220, Math.min(Math.floor(viewfinderWidth * 0.88), 360));
-      const height = Math.max(100, Math.min(Math.floor(viewfinderHeight * 0.28), 160));
+      const widthRatio = isAppleDevice ? 0.96 : 0.88;
+      const heightRatio = isAppleDevice ? 0.42 : 0.28;
+      const maxWidth = isAppleDevice ? 420 : 360;
+      const maxHeight = isAppleDevice ? 220 : 160;
+      const minWidth = isAppleDevice ? 260 : 220;
+      const minHeight = isAppleDevice ? 130 : 100;
+      const width = Math.max(minWidth, Math.min(Math.floor(viewfinderWidth * widthRatio), maxWidth));
+      const height = Math.max(minHeight, Math.min(Math.floor(viewfinderHeight * heightRatio), maxHeight));
       return {
         width: width,
         height: height
       };
     },
-    disableFlip: isAppleMobileDevice(),
+    disableFlip: isAppleDevice,
     rememberLastUsedCamera: true
   };
 }
