@@ -869,6 +869,14 @@ textarea.form-control {
   width: 16px;
 }
 
+.search-highlight {
+  background: #FEF08A;
+  color: inherit;
+  padding: 0 0.1em;
+  border-radius: 0.2em;
+  font-weight: 700;
+}
+
 /* ========== Loan List ========== */
 
 .loan-tabs, .my-tabs {

@@ -34,6 +34,7 @@ let scannerAssistZoomState = {
   loan: '1',
   return: '1'
 };
+let currentEquipmentSearchTerm = '';
 
 function isAppleMobileDevice() {
   const userAgent = navigator.userAgent || '';
@@ -867,14 +868,17 @@ function loadEquipmentList() {
   callAPI('getEquipmentList', { area: area, currentStatus: status }, function(response) {
     if (response.success) {
       allEquipmentList = response.data;
-      displayEquipmentList(response.data, listContainer, countDisplay);
+      const filteredList = currentEquipmentSearchTerm
+        ? response.data.filter(function(equipment) { return equipmentMatchesSearch(equipment, currentEquipmentSearchTerm); })
+        : response.data;
+      displayEquipmentList(filteredList, listContainer, countDisplay, currentEquipmentSearchTerm);
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
     }
   });
 }
 
-function displayEquipmentList(equipmentList, container, countDisplay) {
+function displayEquipmentList(equipmentList, container, countDisplay, searchTerm = '') {
   if (equipmentList.length === 0) {
     container.innerHTML = '<div class="loading">沒有符合條件的輔具</div>';
     if (countDisplay) countDisplay.textContent = '共 0 筆';
@@ -888,12 +892,12 @@ function displayEquipmentList(equipmentList, container, countDisplay) {
   container.innerHTML = '';
   
   equipmentList.forEach(equipment => {
-    const card = createEquipmentCard(equipment);
+    const card = createEquipmentCard(equipment, searchTerm);
     container.appendChild(card);
   });
 }
 
-function createEquipmentCard(equipment) {
+function createEquipmentCard(equipment, searchTerm = '') {
   const card = document.createElement('div');
   card.className = 'equipment-card clickable-card';
   
@@ -905,8 +909,8 @@ function createEquipmentCard(equipment) {
   card.innerHTML = `
     <div class="equipment-card-header">
       <div>
-        <div class="equipment-card-title">${equipment.equipmentName}</div>
-        <div class="equipment-card-id">${equipment.propertyId}</div>
+        <div class="equipment-card-title">${highlightSearchText(equipment.equipmentName, searchTerm)}</div>
+        <div class="equipment-card-id">${highlightSearchText(equipment.propertyId, searchTerm)}</div>
       </div>
       <div class="header-badges">
         <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
@@ -916,16 +920,22 @@ function createEquipmentCard(equipment) {
     <div class="equipment-card-body">
       <div class="equipment-card-row">
         <i class="fas fa-tag"></i>
-        <span>${equipment.category || '未分類'}</span>
+        <span>${highlightSearchText(equipment.category || '未分類', searchTerm)}</span>
       </div>
       <div class="equipment-card-row">
         <i class="fas fa-map-marker-alt"></i>
-        <span>${area} - ${equipment.location}</span>
+        <span>${highlightSearchText(area + ' - ' + (equipment.location || ''), searchTerm)}</span>
       </div>
       <div class="equipment-card-row">
         <i class="fas fa-user"></i>
-        <span>${equipment.keeper}</span>
+        <span>${highlightSearchText(equipment.keeper || '-', searchTerm)}</span>
       </div>
+      ${equipment.notes ? `
+      <div class="equipment-card-row">
+        <i class="fas fa-comment"></i>
+        <span>${highlightSearchText(equipment.notes, searchTerm)}</span>
+      </div>
+      ` : ''}
     </div>
     <div class="equipment-card-footer">
       <button class="btn btn-success btn-small quick-inventory-btn" type="button">
@@ -951,28 +961,20 @@ function createEquipmentCard(equipment) {
 
 function handleSearch(e) {
   const searchTerm = normalizeTextSearchValue(e.target.value);
+  currentEquipmentSearchTerm = searchTerm;
   
   if (!searchTerm) {
     const container = document.getElementById('equipmentList');
     const countDisplay = document.getElementById('equipmentCount');
-    displayEquipmentList(allEquipmentList, container, countDisplay);
+    displayEquipmentList(allEquipmentList, container, countDisplay, '');
     return;
   }
   
-  const filtered = allEquipmentList.filter(equipment => {
-    return includesNormalized(equipment.propertyId, searchTerm) ||
-           includesNormalized(equipment.inventoryId, searchTerm) ||
-           includesNormalized(equipment.equipmentName, searchTerm) ||
-           includesNormalized(equipment.keeper, searchTerm) ||
-           includesNormalized(equipment.category, searchTerm) ||
-           includesNormalized(equipment.location, searchTerm) ||
-           includesNormalized(equipment.currentStatus, searchTerm) ||
-           includesNormalized(equipment.notes, searchTerm);
-  });
+  const filtered = allEquipmentList.filter(equipment => equipmentMatchesSearch(equipment, searchTerm));
   
   const container = document.getElementById('equipmentList');
   const countDisplay = document.getElementById('equipmentCount');
-  displayEquipmentList(filtered, container, countDisplay);
+  displayEquipmentList(filtered, container, countDisplay, searchTerm);
 }
 
 // ==========================================
@@ -989,8 +991,9 @@ function loadMyEquipment() {
   callAPI('getEquipmentByStaff', { staffName: currentUser.name }, function(response) {
     if (response.success) {
       myEquipmentList = response.data;
-      const filteredList = filterMyEquipmentList();
-      displayMyEquipmentList(filteredList, listContainer, countDisplay);
+      const searchTerm = getCurrentMySearchTerm();
+      const filteredList = filterMyEquipmentList(searchTerm);
+      displayMyEquipmentList(filteredList, listContainer, countDisplay, searchTerm);
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
     }
@@ -1009,7 +1012,7 @@ function setupMyTabs() {
       const filteredList = filterMyEquipmentList();
       const container = document.getElementById('myEquipmentList');
       const countDisplay = document.getElementById('myEquipmentCount');
-      displayMyEquipmentList(filteredList, container, countDisplay);
+      displayMyEquipmentList(filteredList, container, countDisplay, getCurrentMySearchTerm());
     });
   });
 }
@@ -1034,14 +1037,10 @@ function filterMyEquipmentList(searchTerm = '') {
     return filteredList;
   }
 
-  return filteredList.filter(equipment => {
-    return includesNormalized(equipment.propertyId, searchTerm) ||
-           includesNormalized(equipment.inventoryId, searchTerm) ||
-           includesNormalized(equipment.equipmentName, searchTerm);
-  });
+  return filteredList.filter(equipment => equipmentMatchesSearch(equipment, searchTerm));
 }
 
-function displayMyEquipmentList(equipmentList, container, countDisplay) {
+function displayMyEquipmentList(equipmentList, container, countDisplay, searchTerm = '') {
   updateBatchInventoryToolbar(equipmentList.length);
 
   if (equipmentList.length === 0) {
@@ -1057,12 +1056,12 @@ function displayMyEquipmentList(equipmentList, container, countDisplay) {
   container.innerHTML = '';
   
   equipmentList.forEach(equipment => {
-    const card = createMyEquipmentCard(equipment);
+    const card = createMyEquipmentCard(equipment, searchTerm);
     container.appendChild(card);
   });
 }
 
-function createMyEquipmentCard(equipment) {
+function createMyEquipmentCard(equipment, searchTerm = '') {
   const card = document.createElement('div');
   const isSelected = selectedBatchInventoryIds.has(normalizeIdentifier(equipment.propertyId));
   card.className = 'equipment-card clickable-card my-equipment-card-clickable' + (isSelected ? ' batch-card-selected' : '');
@@ -1077,8 +1076,8 @@ function createMyEquipmentCard(equipment) {
       <div class="batch-card-header">
         ${isBatchInventoryMode ? `<input type="checkbox" class="batch-card-checkbox" ${isSelected ? 'checked' : ''} aria-label="選取 ${equipment.propertyId}">` : ''}
         <div class="batch-card-main">
-          <div class="equipment-card-title">${equipment.equipmentName}</div>
-          <div class="equipment-card-id">${equipment.propertyId}</div>
+          <div class="equipment-card-title">${highlightSearchText(equipment.equipmentName, searchTerm)}</div>
+          <div class="equipment-card-id">${highlightSearchText(equipment.propertyId, searchTerm)}</div>
         </div>
       </div>
       <div class="header-badges">
@@ -1089,16 +1088,20 @@ function createMyEquipmentCard(equipment) {
     <div class="equipment-card-body">
       <div class="equipment-card-row">
         <i class="fas fa-tag"></i>
-        <span>${equipment.category || '未分類'}</span>
+        <span>${highlightSearchText(equipment.category || '未分類', searchTerm)}</span>
       </div>
       <div class="equipment-card-row">
         <i class="fas fa-map-marker-alt"></i>
-        <span>${area} - ${equipment.location}</span>
+        <span>${highlightSearchText(area + ' - ' + (equipment.location || ''), searchTerm)}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-user"></i>
+        <span>${highlightSearchText(equipment.keeper || '-', searchTerm)}</span>
       </div>
       ${equipment.notes ? `
       <div class="equipment-card-row">
         <i class="fas fa-comment"></i>
-        <span>${equipment.notes}</span>
+        <span>${highlightSearchText(equipment.notes, searchTerm)}</span>
       </div>
       ` : ''}
     </div>
@@ -1141,7 +1144,7 @@ function handleMySearch(e) {
 
   const container = document.getElementById('myEquipmentList');
   const countDisplay = document.getElementById('myEquipmentCount');
-  displayMyEquipmentList(filtered, container, countDisplay);
+  displayMyEquipmentList(filtered, container, countDisplay, searchTerm);
 }
 
 function toggleBatchInventoryMode() {
@@ -1261,6 +1264,76 @@ function renderMyEquipmentCurrentFilter() {
 function getCurrentMySearchTerm() {
   const input = document.getElementById('mySearchInput');
   return input ? normalizeTextSearchValue(input.value) : '';
+}
+
+function tokenizeSearchTerm(searchTerm) {
+  return String(searchTerm || '').trim().split(/\s+/).filter(function(term) {
+    return !!term;
+  });
+}
+
+function equipmentMatchesSearch(equipment, searchTerm) {
+  const tokens = tokenizeSearchTerm(searchTerm);
+  if (tokens.length === 0) {
+    return true;
+  }
+
+  const searchableFields = [
+    equipment.propertyId,
+    equipment.inventoryId,
+    equipment.equipmentName,
+    equipment.keeper,
+    equipment.category,
+    equipment.location,
+    equipment.currentStatus,
+    equipment.notes
+  ];
+
+  return tokens.every(function(token) {
+    return searchableFields.some(function(field) {
+      return includesNormalized(field, token);
+    });
+  });
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, function(char) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char];
+  });
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightSearchText(value, searchTerm) {
+  const text = String(value || '');
+  const tokens = tokenizeSearchTerm(searchTerm);
+  if (!text || tokens.length === 0) {
+    return escapeHtml(text);
+  }
+
+  const uniqueTokens = tokens.filter(function(token, index) {
+    return tokens.indexOf(token) === index;
+  }).sort(function(left, right) {
+    return right.length - left.length;
+  });
+
+  const pattern = uniqueTokens.map(function(token) {
+    return escapeRegExp(token);
+  }).join('|');
+
+  if (!pattern) {
+    return escapeHtml(text);
+  }
+
+  return escapeHtml(text).replace(new RegExp('(' + pattern + ')', 'gi'), '<mark class="search-highlight">$1</mark>');
 }
 
 function openEquipmentDetailModal(equipment) {
