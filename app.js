@@ -1906,6 +1906,11 @@ function openLoanWorkflowWithEquipment(equipment) {
     return;
   }
 
+  const detailModal = document.getElementById('equipmentDetailModal');
+  if (detailModal) {
+    detailModal.classList.remove('active');
+  }
+
   switchView('loan');
   openLoanWorkflow();
   currentLoanEquipment = equipment;
