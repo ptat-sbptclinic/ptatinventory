@@ -337,6 +337,13 @@ textarea.form-control {
   background: #DC2626;
 }
 
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-block {
   width: 100%;
 }
@@ -1261,6 +1268,22 @@ textarea.form-control {
   margin-bottom: 0.35rem;
 }
 
+.loan-selected-equipment-photo {
+  margin: -1rem -1rem 0.9rem;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #eef2ff, #f8fafc);
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.loan-selected-equipment-photo-image {
+  width: 100%;
+  display: block;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+}
+
 .loan-selected-equipment-name {
   font-size: 1.1rem;
   font-weight: 700;
@@ -1489,6 +1512,10 @@ textarea.form-control {
   .loan-signature-summary-item {
     flex-direction: column;
     gap: 0.15rem;
+  }
+
+  .loan-selected-equipment-photo {
+    margin-bottom: 0.75rem;
   }
 
   .loan-signature-summary-item strong {

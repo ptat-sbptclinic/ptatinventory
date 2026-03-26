@@ -900,12 +900,13 @@ function displayEquipmentList(equipmentList, container, countDisplay, searchTerm
 function createEquipmentCard(equipment, searchTerm = '') {
   const card = document.createElement('div');
   card.className = 'equipment-card clickable-card';
-  
+
   const area = getEquipmentArea(equipment);
   const isInventoried = hasInventoryActivityThisMonth(equipment);
   const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
   const inventoryText = isInventoried ? '已盤點' : '未盤點';
-  
+  const isLoaned = equipment.currentStatus === '外借中';
+
   card.innerHTML = `
     <div class="equipment-card-header">
       <div>
@@ -938,6 +939,9 @@ function createEquipmentCard(equipment, searchTerm = '') {
       ` : ''}
     </div>
     <div class="equipment-card-footer">
+      <button class="btn btn-primary btn-small quick-loan-btn" type="button" ${isLoaned ? 'disabled' : ''}>
+        <i class="fas fa-right-left"></i> ${isLoaned ? '已外借' : '直接外借'}
+      </button>
       <button class="btn btn-success btn-small quick-inventory-btn" type="button">
         <i class="fas fa-check"></i> 完成盤點
       </button>
@@ -955,7 +959,15 @@ function createEquipmentCard(equipment, searchTerm = '') {
       window.quickInventory(equipment.propertyId);
     });
   }
-  
+
+  const quickLoanButton = card.querySelector('.quick-loan-btn');
+  if (quickLoanButton && !isLoaned) {
+    quickLoanButton.addEventListener('click', function(event) {
+      event.stopPropagation();
+      openLoanWorkflowWithEquipment(equipment);
+    });
+  }
+
   return card;
 }
 
@@ -1862,6 +1874,35 @@ function openLoanWorkflow() {
   startLoanBarcodeScanner();
 }
 
+function openLoanWorkflowWithEquipment(equipment) {
+  if (!equipment || !equipment.propertyId) {
+    showToast('找不到輔具資料', 'error');
+    return;
+  }
+
+  if (equipment.currentStatus === '外借中') {
+    showToast('此輔具目前已外借', 'error');
+    return;
+  }
+
+  switchView('loan');
+  openLoanWorkflow();
+  currentLoanEquipment = equipment;
+  populateLoanEquipment(equipment);
+  setLoanWorkflowStep('form');
+
+  const manualPropertyInput = document.getElementById('loanManualPropertyId');
+  if (manualPropertyInput) {
+    manualPropertyInput.value = equipment.propertyId;
+  }
+
+  const resultDiv = document.getElementById('loanScanResult');
+  if (resultDiv) {
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+  }
+}
+
 function closeLoanWorkflow() {
   const modal = document.getElementById('loanModal');
   if (modal) {
@@ -1891,6 +1932,8 @@ function resetLoanWorkflow() {
   const purposeInput = document.getElementById('loanPurpose');
   const equipmentName = document.getElementById('loanSelectedEquipmentName');
   const equipmentId = document.getElementById('loanSelectedEquipmentId');
+  const equipmentPhotoWrapper = document.getElementById('loanSelectedEquipmentPhotoWrapper');
+  const equipmentPhoto = document.getElementById('loanSelectedEquipmentPhoto');
   const signatureSummary = document.getElementById('loanSignatureSummary');
 
   if (borrowerInput) borrowerInput.value = '';
@@ -1900,6 +1943,12 @@ function resetLoanWorkflow() {
   if (purposeInput) purposeInput.value = '';
   if (equipmentName) equipmentName.textContent = '尚未掃描';
   if (equipmentId) equipmentId.textContent = '';
+  if (equipmentPhotoWrapper) equipmentPhotoWrapper.style.display = 'none';
+  if (equipmentPhoto) {
+    equipmentPhoto.removeAttribute('src');
+    equipmentPhoto.onerror = null;
+    equipmentPhoto.style.display = 'none';
+  }
   if (signatureSummary) signatureSummary.innerHTML = '';
 
   if (typeof clearSignature === 'function') {
@@ -2088,10 +2137,28 @@ function handleLoanBarcodeDetected(barcode) {
 function populateLoanEquipment(equipment) {
   const equipmentName = document.getElementById('loanSelectedEquipmentName');
   const equipmentId = document.getElementById('loanSelectedEquipmentId');
+  const equipmentPhotoWrapper = document.getElementById('loanSelectedEquipmentPhotoWrapper');
+  const equipmentPhoto = document.getElementById('loanSelectedEquipmentPhoto');
   const startDateInput = document.getElementById('loanStartDate');
 
   if (equipmentName) equipmentName.textContent = equipment.equipmentName || '未命名輔具';
   if (equipmentId) equipmentId.textContent = equipment.propertyId || '';
+  if (equipmentPhotoWrapper && equipmentPhoto) {
+    if (equipment.photoUrl) {
+      equipmentPhoto.src = getPhotoDisplayUrl(equipment.photoUrl);
+      equipmentPhoto.onerror = function() {
+        equipmentPhoto.style.display = 'none';
+        equipmentPhotoWrapper.style.display = 'none';
+      };
+      equipmentPhoto.style.display = 'block';
+      equipmentPhotoWrapper.style.display = 'block';
+    } else {
+      equipmentPhoto.removeAttribute('src');
+      equipmentPhoto.onerror = null;
+      equipmentPhoto.style.display = 'none';
+      equipmentPhotoWrapper.style.display = 'none';
+    }
+  }
   if (startDateInput && !startDateInput.value) {
     startDateInput.value = getCurrentDateTimeLocalString();
   }
