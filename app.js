@@ -609,6 +609,18 @@ function setupEventListeners() {
     detailQuickInventoryBtn.addEventListener('click', handleDetailQuickInventory);
   }
 
+  const detailQuickLoanBtn = document.getElementById('detailQuickLoanBtn');
+  if (detailQuickLoanBtn) {
+    detailQuickLoanBtn.addEventListener('click', function() {
+      if (!currentEquipmentDetail) {
+        showToast('請先選擇輔具', 'error');
+        return;
+      }
+
+      openLoanWorkflowWithEquipment(currentEquipmentDetail);
+    });
+  }
+
   const equipmentPhotoTrigger = document.getElementById('equipmentPhotoTrigger');
   if (equipmentPhotoTrigger) {
     equipmentPhotoTrigger.addEventListener('click', function() {
@@ -1381,6 +1393,7 @@ function renderEquipmentDetailModal() {
   const notesInput = document.getElementById('detailNotesInput');
   const cleanCheckbox = document.getElementById('detailActionClean');
   const chargeCheckbox = document.getElementById('detailActionCharge');
+  const detailQuickLoanBtn = document.getElementById('detailQuickLoanBtn');
 
   if (nameEl) nameEl.textContent = currentEquipmentDetail.equipmentName || '未命名輔具';
   if (propertyIdEl) propertyIdEl.textContent = currentEquipmentDetail.propertyId || '';
@@ -1433,6 +1446,14 @@ function renderEquipmentDetailModal() {
   const actionFlags = parseCurrentActionFlags(currentEquipmentDetail.currentAction || '');
   if (cleanCheckbox) cleanCheckbox.checked = actionFlags.clean;
   if (chargeCheckbox) chargeCheckbox.checked = actionFlags.charge;
+
+  if (detailQuickLoanBtn) {
+    const isLoaned = currentEquipmentDetail.currentStatus === '外借中';
+    detailQuickLoanBtn.disabled = isLoaned;
+    detailQuickLoanBtn.innerHTML = isLoaned
+      ? '<i class="fas fa-right-left"></i> 已外借'
+      : '<i class="fas fa-right-left"></i> 直接外借';
+  }
 }
 
 function handleSaveEquipmentDetail() {
