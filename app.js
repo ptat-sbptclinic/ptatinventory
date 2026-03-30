@@ -908,6 +908,7 @@ function switchView(viewName) {
       break;
     case 'my':
       loadMyEquipment();
+      setTimeout(applyStaffFilterOnMyPage, 100);
       break;
     case 'loan':
       loadLoanList();
@@ -1754,7 +1755,7 @@ function renderDashboardByArea(equipmentList, area, container) {
     const percentage = total > 0 ? Math.round((inventoried.length / total) * 100) : 0;
     
     const item = document.createElement('div');
-    item.className = 'dashboard-staff-item';
+    item.className = 'dashboard-staff-item clickable';
     item.innerHTML = `
       <div class="dashboard-staff-name">${staffName}</div>
       <div class="dashboard-staff-progress">
@@ -1764,8 +1765,31 @@ function renderDashboardByArea(equipmentList, area, container) {
       </div>
       <div class="dashboard-staff-stats">${inventoried.length}/${total}</div>
     `;
+    
+    item.addEventListener('click', function() {
+      navigateToMyEquipment(staffName);
+    });
+    
     container.appendChild(item);
   });
+}
+
+function navigateToMyEquipment(staffName) {
+  localStorage.setItem('selectedStaffFilter', staffName);
+  switchView('my');
+}
+
+function applyStaffFilterOnMyPage() {
+  const selectedStaff = localStorage.getItem('selectedStaffFilter');
+  if (selectedStaff) {
+    const searchInput = document.getElementById('mySearchInput');
+    if (searchInput) {
+      searchInput.value = selectedStaff;
+      localStorage.removeItem('selectedStaffFilter');
+      const event = new Event('input', { bubbles: true });
+      searchInput.dispatchEvent(event);
+    }
+  }
 }
 
 // ==========================================

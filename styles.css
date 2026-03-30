@@ -247,6 +247,17 @@ body {
   border-radius: 8px;
 }
 
+.dashboard-staff-item.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dashboard-staff-item.clickable:hover {
+  background: #E5E7EB;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
 .dashboard-staff-name {
   min-width: 80px;
   font-weight: 600;
