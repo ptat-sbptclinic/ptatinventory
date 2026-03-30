@@ -9,7 +9,8 @@ const SHEET_NAMES = {
   LOANS: '外借記錄',
   STAFF: '人員清單',
   INVENTORY_LOG: '盤點記錄',
-  MAINTENANCE: '維護記錄'
+  MAINTENANCE: '維護記錄',
+  SCRAP: '報廢記錄'
 };
 
 // 輔具清單欄位索引（對應實際的 22 個欄位）
@@ -70,6 +71,17 @@ const MAINTENANCE_COLS = {
   CREATED_AT: 7
 };
 
+const SCRAP_COLS = {
+  SCRAP_ID: 0,
+  PROPERTY_ID: 1,
+  EQUIPMENT_NAME: 2,
+  SCRAP_DATE: 3,
+  SCRAP_REASON: 4,
+  STAFF_NAME: 5,
+  DOCUMENT_STATUS: 6,
+  CREATED_AT: 7
+};
+
 // ==========================================
 // Web App 主要入口
 // ==========================================
@@ -126,6 +138,8 @@ function doPost(e) {
         return handleCreateMaintenance(e);
       case 'completeMaintenance':
         return handleCompleteMaintenance(e);
+      case 'createScrap':
+        return handleCreateScrap(e);
       default:
         return createResponse(false, '未知的操作');
     }
@@ -1742,6 +1756,94 @@ function handleCompleteMaintenance(e) {
     propertyId: propertyId,
     newStatus: '展示中'
   });
+}
+
+function handleCreateScrap(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  const scrapDate = e.parameter.scrapDate || '';
+  const scrapReason = String(e.parameter.scrapReason || '').trim();
+  const staffName = e.parameter.staffName || '';
+
+  if (!propertyId) {
+    return createResponse(false, '請提供財產編號');
+  }
+
+  if (!scrapReason) {
+    return createResponse(false, '請填寫報廢原因');
+  }
+
+  const equipmentSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipmentSheet);
+  const equipmentData = equipmentSheet.getDataRange().getValues();
+
+  let equipmentRowIndex = -1;
+  let currentEquipment = null;
+
+  for (let i = 1; i < equipmentData.length; i++) {
+    if (normalizeIdentifier(equipmentData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
+      equipmentRowIndex = i + 1;
+      currentEquipment = equipmentData[i];
+      break;
+    }
+  }
+
+  if (equipmentRowIndex === -1) {
+    return createResponse(false, '找不到此財產編號對應的輔具');
+  }
+
+  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('已報廢');
+  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+
+  const scrapSheet = getSheet(SHEET_NAMES.SCRAP);
+  ensureScrapSheetColumns(scrapSheet);
+
+  const scrapId = generateScrapId();
+  const now = new Date();
+
+  const newRow = [
+    scrapId,
+    propertyId,
+    currentEquipment[EQUIPMENT_COLS.EQUIPMENT_NAME] || '',
+    scrapDate,
+    scrapReason,
+    staffName,
+    '等待縣府文件',
+    formatDateTime(now)
+  ];
+
+  scrapSheet.appendRow(newRow);
+
+  return createResponse(true, '輔具已報廢', {
+    scrapId: scrapId,
+    propertyId: propertyId,
+    newStatus: '已報廢'
+  });
+}
+
+function generateScrapId() {
+  const now = new Date();
+  const year = String(now.getFullYear()).slice(-2);
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  return `S${year}${month}${day}${random}`;
+}
+
+function ensureScrapSheetColumns(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) {
+    const headers = [
+      '報廢編號',
+      '財產編號',
+      '輔具名稱',
+      '報廢日期',
+      '報廢原因',
+      '申請人員',
+      '縣府文件狀態',
+      '建立時間'
+    ];
+    sheet.appendRow(headers);
+  }
 }
 
 function getSheet(name) {

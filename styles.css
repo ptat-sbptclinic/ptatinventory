@@ -569,6 +569,16 @@ textarea.form-control {
   color: #1E40AF;
 }
 
+.status-badge[data-status="維護中"] {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-badge[data-status="已報廢"] {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
 .status-badge[data-status="報廢"] {
   background: #FEE2E2;
   color: #991B1B;
@@ -1718,4 +1728,14 @@ textarea.form-control {
     font-size: 0.72rem;
     line-height: 1.1;
   }
+}
+
+.scrap-card {
+  opacity: 0.75;
+  border-left: 4px solid #6B7280;
+}
+
+.scrap-card .equipment-card-title {
+  text-decoration: line-through;
+  color: #6B7280;
 }

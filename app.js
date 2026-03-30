@@ -728,6 +728,30 @@ function setupEventListeners() {
       }
     });
   }
+
+  const closeScrapModalBtn = document.getElementById('closeScrapModalBtn');
+  if (closeScrapModalBtn) {
+    closeScrapModalBtn.addEventListener('click', closeScrapModal);
+  }
+
+  const cancelScrapBtn = document.getElementById('cancelScrapBtn');
+  if (cancelScrapBtn) {
+    cancelScrapBtn.addEventListener('click', closeScrapModal);
+  }
+
+  const submitScrapBtn = document.getElementById('submitScrapBtn');
+  if (submitScrapBtn) {
+    submitScrapBtn.addEventListener('click', handleSubmitScrap);
+  }
+
+  const scrapModal = document.getElementById('scrapModal');
+  if (scrapModal) {
+    scrapModal.addEventListener('click', function(event) {
+      if (event.target === scrapModal) {
+        closeScrapModal();
+      }
+    });
+  }
 }
 
 // ==========================================
@@ -1703,6 +1727,7 @@ function renderDashboardByArea(equipmentList, area, container) {
   
   const staffGroups = {};
   areaEquipment.forEach(function(equipment) {
+    if (equipment.currentStatus === '已報廢') return;
     const keeper = equipment.keeper || '未指定';
     if (!staffGroups[keeper]) {
       staffGroups[keeper] = [];
@@ -1965,10 +1990,12 @@ let allLoanEquipment = [];
 let currentLoanArea = '';
 let currentMaintenanceStatusTab = '外借中';
 let allMaintenanceEquipment = [];
+let allScrapEquipment = [];
 
 function loadLoanList() {
   const listContainer = document.getElementById('loanList');
   const maintenanceContainer = document.getElementById('maintenanceList');
+  const scrapContainer = document.getElementById('scrapList');
   const countDisplay = document.getElementById('loanCount');
   
   if (!listContainer) {
@@ -1979,6 +2006,9 @@ function loadLoanList() {
   listContainer.innerHTML = '<div class="loading">載入中...</div>';
   if (maintenanceContainer) {
     maintenanceContainer.innerHTML = '<div class="loading">載入中...</div>';
+  }
+  if (scrapContainer) {
+    scrapContainer.innerHTML = '<div class="loading">載入中...</div>';
   }
   
   setupLoanTabs();
@@ -1994,8 +2024,13 @@ function loadLoanList() {
         return equipment.currentDynamic && equipment.currentDynamic.includes('維護中');
       });
       
+      allScrapEquipment = response.data.filter(equipment => {
+        return equipment.currentDynamic && equipment.currentDynamic.includes('已報廢');
+      });
+      
       console.log('外借中的輔具總數:', allLoanEquipment.length);
       console.log('維護中的輔具總數:', allMaintenanceEquipment.length);
+      console.log('已報廢的輔具總數:', allScrapEquipment.length);
       
       updateLoanMaintenanceView();
     } else {
@@ -2027,16 +2062,24 @@ function setupStatusTabs() {
 function updateLoanMaintenanceView() {
   const loanContainer = document.getElementById('loanList');
   const maintenanceContainer = document.getElementById('maintenanceList');
+  const scrapContainer = document.getElementById('scrapList');
   const countDisplay = document.getElementById('loanCount');
   
   if (currentMaintenanceStatusTab === '外借中') {
     if (loanContainer) loanContainer.style.display = 'block';
     if (maintenanceContainer) maintenanceContainer.style.display = 'none';
+    if (scrapContainer) scrapContainer.style.display = 'none';
     filterLoanByArea();
-  } else {
+  } else if (currentMaintenanceStatusTab === '維護中') {
     if (loanContainer) loanContainer.style.display = 'none';
     if (maintenanceContainer) maintenanceContainer.style.display = 'block';
+    if (scrapContainer) scrapContainer.style.display = 'none';
     filterMaintenanceByArea();
+  } else {
+    if (loanContainer) loanContainer.style.display = 'none';
+    if (maintenanceContainer) maintenanceContainer.style.display = 'none';
+    if (scrapContainer) scrapContainer.style.display = 'block';
+    filterScrapByArea();
   }
 }
 
@@ -2052,6 +2095,21 @@ function filterMaintenanceByArea() {
       return area === currentLoanArea;
     });
     displayMaintenanceList(filtered, maintenanceContainer, countDisplay);
+  }
+}
+
+function filterScrapByArea() {
+  const scrapContainer = document.getElementById('scrapList');
+  const countDisplay = document.getElementById('loanCount');
+  
+  if (!currentLoanArea) {
+    displayScrapList(allScrapEquipment, scrapContainer, countDisplay);
+  } else {
+    const filtered = allScrapEquipment.filter(equipment => {
+      const area = getEquipmentArea(equipment);
+      return area === currentLoanArea;
+    });
+    displayScrapList(filtered, scrapContainer, countDisplay);
   }
 }
 
@@ -2114,6 +2172,9 @@ function createMaintenanceCard(equipment) {
       <button class="btn btn-success btn-small complete-maintenance-btn" type="button">
         <i class="fas fa-check"></i> 完成維護
       </button>
+      <button class="btn btn-danger btn-small scrap-equipment-btn" type="button">
+        <i class="fas fa-trash-alt"></i> 進行報廢
+      </button>
     </div>
   `;
   
@@ -2129,7 +2190,144 @@ function createMaintenanceCard(equipment) {
     });
   }
   
+  const scrapBtn = card.querySelector('.scrap-equipment-btn');
+  if (scrapBtn) {
+    scrapBtn.addEventListener('click', function(event) {
+      event.stopPropagation();
+      openScrapModal(equipment);
+    });
+  }
+  
   return card;
+}
+
+let currentScrapEquipment = null;
+
+function displayScrapList(equipmentList, container, countDisplay) {
+  if (equipmentList.length === 0) {
+    container.innerHTML = '<div class="loading">目前沒有已報廢的輔具</div>';
+    if (countDisplay) countDisplay.textContent = '共 0 筆';
+    return;
+  }
+  
+  if (countDisplay) {
+    countDisplay.textContent = `共 ${equipmentList.length} 筆`;
+  }
+  
+  container.innerHTML = '';
+  
+  equipmentList.forEach(equipment => {
+    const card = createScrapCard(equipment);
+    container.appendChild(card);
+  });
+}
+
+function createScrapCard(equipment) {
+  const card = document.createElement('div');
+  card.className = 'equipment-card clickable-card scrap-card';
+  
+  const area = getEquipmentArea(equipment);
+  
+  card.innerHTML = `
+    <div class="equipment-card-header">
+      <div>
+        <div class="equipment-card-title">${equipment.equipmentName || '未命名輔具'}</div>
+        <div class="equipment-card-id">${equipment.propertyId || '-'}</div>
+      </div>
+      <div class="header-badges">
+        <span class="status-badge status-badge-scrap" data-status="已報廢">已報廢</span>
+      </div>
+    </div>
+    <div class="equipment-card-body">
+      <div class="equipment-card-row">
+        <i class="fas fa-tag"></i>
+        <span>${equipment.category || '未分類'}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>${area} - ${equipment.location || ''}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-user"></i>
+        <span>${equipment.keeper || '-'}</span>
+      </div>
+      ${equipment.notes ? `
+      <div class="equipment-card-row">
+        <i class="fas fa-comment"></i>
+        <span>${equipment.notes}</span>
+      </div>
+      ` : ''}
+    </div>
+  `;
+  
+  card.addEventListener('click', function() {
+    openEquipmentDetailModal(equipment);
+  });
+  
+  return card;
+}
+
+function openScrapModal(equipment) {
+  currentScrapEquipment = JSON.parse(JSON.stringify(equipment));
+  
+  const modal = document.getElementById('scrapModal');
+  if (!modal) return;
+  
+  const propertyIdEl = document.getElementById('scrapPropertyId');
+  const nameEl = document.getElementById('scrapSelectedEquipmentName');
+  const idEl = document.getElementById('scrapSelectedEquipmentId');
+  const scrapDateEl = document.getElementById('scrapDate');
+  const scrapReasonEl = document.getElementById('scrapReason');
+  
+  if (propertyIdEl) propertyIdEl.value = equipment.propertyId || '';
+  if (nameEl) nameEl.textContent = equipment.equipmentName || '未命名輔具';
+  if (idEl) idEl.textContent = equipment.propertyId || '';
+  if (scrapDateEl) scrapDateEl.value = getCurrentDateTimeLocal();
+  if (scrapReasonEl) scrapReasonEl.value = '';
+  
+  modal.classList.add('active');
+}
+
+function closeScrapModal() {
+  const modal = document.getElementById('scrapModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+  currentScrapEquipment = null;
+  loadLoanList();
+}
+
+function handleSubmitScrap() {
+  if (!currentScrapEquipment) {
+    showToast('請先選擇輔具', 'error');
+    return;
+  }
+  
+  const propertyId = currentScrapEquipment.propertyId;
+  const scrapDate = document.getElementById('scrapDate').value;
+  const scrapReason = document.getElementById('scrapReason').value.trim();
+  
+  if (!scrapReason) {
+    showToast('請填寫報廢原因', 'error');
+    return;
+  }
+  
+  callAPI('createScrap', {
+    propertyId: propertyId,
+    scrapDate: scrapDate,
+    scrapReason: scrapReason,
+    staffName: currentUser ? currentUser.name : ''
+  }, function(response) {
+    if (response.success) {
+      showToast('輔具已報廢', 'success');
+      closeScrapModal();
+      closeEquipmentDetailModal();
+      loadEquipmentList();
+      loadMyEquipment();
+    } else {
+      showToast(response.message || '報廢失敗', 'error');
+    }
+  });
 }
 
 let currentCompleteMaintenanceEquipment = null;
