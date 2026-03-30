@@ -628,6 +628,24 @@ textarea.form-control {
   color: #92400E;
 }
 
+.photo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #10B981;
+  color: white;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.photo-badge-no-photo {
+  background: #D1D5DB;
+  color: #6B7280;
+}
+
 /* ========== Filter Section ========== */
 
 /* ========== 掃描介面 ========== */
@@ -817,6 +835,10 @@ textarea.form-control {
   margin-bottom: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.photo-filter-select {
+  min-width: 120px;
 }
 
 .search-group {

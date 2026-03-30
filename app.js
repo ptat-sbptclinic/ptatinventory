@@ -7,6 +7,7 @@ let staffList = [];
 let allEquipmentList = [];
 let myEquipmentList = [];
 let currentInventoryStatus = '';
+let currentPhotoFilter = '';
 let html5QrCode = null;
 let isScannerRunning = false;
 let isProcessingScanResult = false;
@@ -500,6 +501,17 @@ function setupEventListeners() {
   }
 
   setupMyTabs();
+
+  const photoFilterSelect = document.getElementById('photoFilterSelect');
+  if (photoFilterSelect) {
+    photoFilterSelect.addEventListener('change', function() {
+      currentPhotoFilter = this.value;
+      const filteredList = filterMyEquipmentList();
+      const container = document.getElementById('myEquipmentList');
+      const countDisplay = document.getElementById('myEquipmentCount');
+      displayMyEquipmentList(filteredList, container, countDisplay, getCurrentMySearchTerm());
+    });
+  }
 
   const startScanBtn = document.getElementById('startScanBtn');
   if (startScanBtn) {
@@ -1114,6 +1126,19 @@ function filterMyEquipmentList(searchTerm = '') {
     });
   }
 
+  if (currentPhotoFilter) {
+    filteredList = filteredList.filter(equipment => {
+      const hasPhoto = equipment.photoUrl && equipment.photoUrl.trim() !== '';
+      if (currentPhotoFilter === 'hasPhoto') {
+        return hasPhoto;
+      }
+      if (currentPhotoFilter === 'noPhoto') {
+        return !hasPhoto;
+      }
+      return true;
+    });
+  }
+
   if (!searchTerm) {
     return filteredList;
   }
@@ -1151,6 +1176,8 @@ function createMyEquipmentCard(equipment, searchTerm = '') {
   const isInventoried = hasInventoryActivityThisMonth(equipment);
   const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
   const inventoryText = isInventoried ? '已盤點' : '未盤點';
+  const hasPhoto = equipment.photoUrl && equipment.photoUrl.trim() !== '';
+  const photoBadge = hasPhoto ? '<span class="photo-badge"><i class="fas fa-camera"></i></span>' : '<span class="photo-badge photo-badge-no-photo"><i class="fas fa-camera"></i></span>';
   
   card.innerHTML = `
     <div class="equipment-card-header">
@@ -1164,6 +1191,7 @@ function createMyEquipmentCard(equipment, searchTerm = '') {
       <div class="header-badges">
         <span class="status-badge" data-status="${equipment.currentStatus}">${equipment.currentStatus}</span>
         <span class="inventory-badge ${inventoryClass}">${inventoryText}</span>
+        ${photoBadge}
       </div>
     </div>
     <div class="equipment-card-body">
