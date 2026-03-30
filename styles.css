@@ -1354,6 +1354,18 @@ textarea.form-control {
   font-weight: 600;
 }
 
+.photo-input-options {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.photo-input-options label {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .equipment-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

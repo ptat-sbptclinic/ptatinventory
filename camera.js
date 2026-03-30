@@ -33,6 +33,8 @@ function startCamera() {
     stopReturnBarcodeScanner();
   }
 
+  setupPhotoFileInput();
+  
   video.setAttribute('playsinline', 'true');
   video.setAttribute('webkit-playsinline', 'true');
   video.setAttribute('autoplay', 'true');
@@ -97,6 +99,41 @@ function stopCamera() {
   
   const video = document.getElementById('photoVideo');
   video.srcObject = null;
+}
+
+function setupPhotoFileInput() {
+  const fileInput = document.getElementById('photoFileInput');
+  if (!fileInput) return;
+  
+  fileInput.addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const photoData = e.target.result;
+      
+      const video = document.getElementById('photoVideo');
+      const preview = document.getElementById('photoPreview');
+      const captureBtn = document.getElementById('capturePhotoBtn');
+      const retakeBtn = document.getElementById('retakePhotoBtn');
+      const uploadBtn = document.getElementById('uploadPhotoBtn');
+      
+      stopCamera();
+      
+      capturedPhoto = photoData;
+      preview.src = capturedPhoto;
+      preview.style.display = 'block';
+      video.style.display = 'none';
+      
+      captureBtn.style.display = 'none';
+      retakeBtn.style.display = 'block';
+      uploadBtn.style.display = 'block';
+      
+      fileInput.value = '';
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function capturePhoto() {
