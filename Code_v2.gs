@@ -124,6 +124,8 @@ function doPost(e) {
         return handleGenerateMonthlyLoanReport(e);
       case 'createMaintenance':
         return handleCreateMaintenance(e);
+      case 'completeMaintenance':
+        return handleCompleteMaintenance(e);
       default:
         return createResponse(false, '未知的操作');
     }
@@ -1679,6 +1681,67 @@ function ensureMaintenanceSheetColumns(sheet) {
     ];
     sheet.appendRow(headers);
   }
+}
+
+function handleCompleteMaintenance(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  const acceptDate = e.parameter.acceptDate || '';
+  const completeDate = e.parameter.completeDate || '';
+  const notes = String(e.parameter.notes || '').trim();
+  const staffName = e.parameter.staffName || '';
+
+  if (!propertyId) {
+    return createResponse(false, '請提供財產編號');
+  }
+
+  if (!completeDate) {
+    return createResponse(false, '請填寫驗收日期');
+  }
+
+  const maintenanceSheet = getSheet(SHEET_NAMES.MAINTENANCE);
+  ensureMaintenanceSheetColumns(maintenanceSheet);
+  const data = maintenanceSheet.getDataRange().getValues();
+
+  let lastMaintenanceRowIndex = -1;
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (normalizeIdentifier(data[i][MAINTENANCE_COLS.PROPERTY_ID]) === propertyId && 
+        !data[i][MAINTENANCE_COLS.COMPLETE_DATE]) {
+      lastMaintenanceRowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (lastMaintenanceRowIndex === -1) {
+    return createResponse(false, '找不到該輔具的維護記錄');
+  }
+
+  maintenanceSheet.getRange(lastMaintenanceRowIndex, MAINTENANCE_COLS.COMPLETE_DATE + 1).setValue(completeDate);
+  if (notes) {
+    maintenanceSheet.getRange(lastMaintenanceRowIndex, MAINTENANCE_COLS.NOTES + 1).setValue(notes);
+  }
+  maintenanceSheet.getRange(lastMaintenanceRowIndex, MAINTENANCE_COLS.STAFF_NAME + 1).setValue(staffName);
+
+  const equipmentSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipmentSheet);
+  const equipmentData = equipmentSheet.getDataRange().getValues();
+
+  let equipmentRowIndex = -1;
+  for (let i = 1; i < equipmentData.length; i++) {
+    if (normalizeIdentifier(equipmentData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
+      equipmentRowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (equipmentRowIndex !== -1) {
+    equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
+    equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+  }
+
+  return createResponse(true, '維護已完成，輔具已改為展示中', {
+    propertyId: propertyId,
+    newStatus: '展示中'
+  });
 }
 
 function getSheet(name) {

@@ -856,7 +856,7 @@ function switchView(viewName) {
     stopReturnBarcodeScanner();
   }
 
-  const allViews = ['scanView', 'listView', 'loanView', 'reportView', 'myView'];
+  const allViews = ['scanView', 'listView', 'loanView', 'dashboardView', 'reportView', 'myView'];
   allViews.forEach(viewId => {
     const view = document.getElementById(viewId);
     if (view) {
@@ -887,6 +887,9 @@ function switchView(viewName) {
       break;
     case 'loan':
       loadLoanList();
+      break;
+    case 'dashboard':
+      loadDashboard();
       break;
     case 'report':
       initializeReportView();
@@ -1546,18 +1549,18 @@ function handleDetailMaintenance() {
     return;
   }
 
-  if (currentEquipmentDetail.currentStatus === '維護中') {
-    showToast('此輔具已在維護中', 'warning');
-    return;
-  }
-
   if (currentEquipmentDetail.currentStatus === '外借中') {
     showToast('此輔具目前外借中，無法進行維護', 'error');
     return;
   }
 
   currentMaintenanceEquipment = JSON.parse(JSON.stringify(currentEquipmentDetail));
-  openMaintenanceModal(currentEquipmentDetail);
+  
+  if (currentEquipmentDetail.currentStatus === '維護中') {
+    openCompleteMaintenanceModal(currentEquipmentDetail);
+  } else {
+    openMaintenanceModal(currentEquipmentDetail);
+  }
 }
 
 function openMaintenanceModal(equipment) {
@@ -1577,6 +1580,16 @@ function openMaintenanceModal(equipment) {
   if (acceptDateEl) acceptDateEl.value = getCurrentDateTimeLocal();
   if (completeDateEl) completeDateEl.value = '';
   if (notesEl) notesEl.value = '';
+  
+  const modalHeader = modal.querySelector('.modal-header h3');
+  if (modalHeader) {
+    modalHeader.innerHTML = '<i class="fas fa-wrench"></i> 進行維護';
+  }
+  
+  const submitBtn = document.getElementById('submitMaintenanceBtn');
+  if (submitBtn) {
+    submitBtn.innerHTML = '<i class="fas fa-check"></i> 確認送件';
+  }
 
   modal.classList.add('active');
 }
@@ -1587,6 +1600,8 @@ function closeMaintenanceModal() {
     modal.classList.remove('active');
   }
   currentMaintenanceEquipment = null;
+  currentCompleteMaintenanceEquipment = null;
+  loadLoanList();
 }
 
 function getCurrentDateTimeLocal() {
@@ -1609,13 +1624,23 @@ function handleSubmitMaintenance() {
   const acceptDate = document.getElementById('maintenanceAcceptDate').value;
   const completeDate = document.getElementById('maintenanceCompleteDate').value;
   const notes = document.getElementById('maintenanceNotes').value.trim();
+  const isCompleting = currentMaintenanceEquipment.currentStatus === '維護中';
 
-  if (!notes) {
-    showToast('請填寫維護說明', 'error');
-    return;
+  if (isCompleting) {
+    if (!completeDate) {
+      showToast('請填寫驗收日期', 'error');
+      return;
+    }
+  } else {
+    if (!notes) {
+      showToast('請填寫維護說明', 'error');
+      return;
+    }
   }
 
-  callAPI('createMaintenance', {
+  const apiAction = isCompleting ? 'completeMaintenance' : 'createMaintenance';
+
+  callAPI(apiAction, {
     propertyId: propertyId,
     acceptDate: acceptDate,
     completeDate: completeDate,
@@ -1623,7 +1648,9 @@ function handleSubmitMaintenance() {
     staffName: currentUser ? currentUser.name : ''
   }, function(response) {
     if (response.success) {
-      if (completeDate) {
+      if (isCompleting) {
+        showToast('維護已完成，輔具已改為展示中', 'success');
+      } else if (completeDate) {
         showToast('維護記錄已建立並完成驗收', 'success');
       } else {
         showToast('維護記錄已建立，輔具已改為維護中', 'success');
@@ -1633,7 +1660,7 @@ function handleSubmitMaintenance() {
       loadEquipmentList();
       loadMyEquipment();
     } else {
-      showToast(response.message || '建立維護記錄失敗', 'error');
+      showToast(response.message || '操作失敗', 'error');
     }
   });
 }
@@ -1645,6 +1672,74 @@ function syncUpdatedEquipment(updatedEquipment) {
 
   myEquipmentList = myEquipmentList.map(function(item) {
     return isSameIdentifier(item.propertyId, updatedEquipment.propertyId) ? updatedEquipment : item;
+  });
+}
+
+// ==========================================
+// 儀表板
+// ==========================================
+
+function loadDashboard() {
+  callAPI('getEquipmentList', { area: '', currentStatus: '' }, function(response) {
+    if (response.success) {
+      const pinzhongContainer = document.getElementById('dashboardPinzhong');
+      const pinbeiguanContainer = document.getElementById('dashboardPinbeiguan');
+      
+      if (pinzhongContainer) {
+        renderDashboardByArea(response.data, '屏中區', pinzhongContainer);
+      }
+      if (pinbeiguanContainer) {
+        renderDashboardByArea(response.data, '屏北區', pinbeiguanContainer);
+      }
+    }
+  });
+}
+
+function renderDashboardByArea(equipmentList, area, container) {
+  const areaEquipment = equipmentList.filter(function(equipment) {
+    const equipmentArea = getEquipmentArea(equipment);
+    return equipmentArea === area;
+  });
+  
+  const staffGroups = {};
+  areaEquipment.forEach(function(equipment) {
+    const keeper = equipment.keeper || '未指定';
+    if (!staffGroups[keeper]) {
+      staffGroups[keeper] = [];
+    }
+    staffGroups[keeper].push(equipment);
+  });
+  
+  const staffNames = Object.keys(staffGroups).sort();
+  
+  if (staffNames.length === 0) {
+    container.innerHTML = '<div class="loading">目前沒有資料</div>';
+    return;
+  }
+  
+  container.innerHTML = '';
+  
+  staffNames.forEach(function(staffName) {
+    const staffEquipment = staffGroups[staffName];
+    const inventoried = staffEquipment.filter(function(eq) {
+      return hasInventoryActivityThisMonth(eq);
+    });
+    const notInventoried = staffEquipment.length - inventoried.length;
+    const total = staffEquipment.length;
+    const percentage = total > 0 ? Math.round((inventoried.length / total) * 100) : 0;
+    
+    const item = document.createElement('div');
+    item.className = 'dashboard-staff-item';
+    item.innerHTML = `
+      <div class="dashboard-staff-name">${staffName}</div>
+      <div class="dashboard-staff-progress">
+        <div class="dashboard-staff-progress-bar inventoried" style="width: ${percentage}%;">
+          ${percentage}%
+        </div>
+      </div>
+      <div class="dashboard-staff-stats">${inventoried.length}/${total}</div>
+    `;
+    container.appendChild(item);
   });
 }
 
@@ -1868,9 +1963,12 @@ function restoreEquipmentDetailModalAfterPhoto() {
 
 let allLoanEquipment = [];
 let currentLoanArea = '';
+let currentMaintenanceStatusTab = '外借中';
+let allMaintenanceEquipment = [];
 
 function loadLoanList() {
   const listContainer = document.getElementById('loanList');
+  const maintenanceContainer = document.getElementById('maintenanceList');
   const countDisplay = document.getElementById('loanCount');
   
   if (!listContainer) {
@@ -1879,25 +1977,194 @@ function loadLoanList() {
   }
   
   listContainer.innerHTML = '<div class="loading">載入中...</div>';
+  if (maintenanceContainer) {
+    maintenanceContainer.innerHTML = '<div class="loading">載入中...</div>';
+  }
   
-  // 設定區域標籤點擊事件
   setupLoanTabs();
+  setupStatusTabs();
   
-  // 載入所有外借中的輔具
   callAPI('getEquipmentList', { area: '', currentStatus: '' }, function(response) {
     if (response.success) {
-      // 篩選「目前動態」包含「外借中」的輔具
       allLoanEquipment = response.data.filter(equipment => {
         return equipment.currentDynamic && equipment.currentDynamic.includes('外借中');
       });
       
+      allMaintenanceEquipment = response.data.filter(equipment => {
+        return equipment.currentDynamic && equipment.currentDynamic.includes('維護中');
+      });
+      
       console.log('外借中的輔具總數:', allLoanEquipment.length);
-      displayLoanList(allLoanEquipment, listContainer, countDisplay);
+      console.log('維護中的輔具總數:', allMaintenanceEquipment.length);
+      
+      updateLoanMaintenanceView();
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
       showToast('載入外借清單失敗', 'error');
     }
   });
+}
+
+function setupStatusTabs() {
+  const tabs = document.querySelectorAll('.status-tab');
+  tabs.forEach(tab => {
+    if (tab.dataset.bound === 'true') {
+      return;
+    }
+
+    tab.addEventListener('click', function() {
+      tabs.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      
+      currentMaintenanceStatusTab = this.dataset.status || '外借中';
+      updateLoanMaintenanceView();
+    });
+
+    tab.dataset.bound = 'true';
+  });
+}
+
+function updateLoanMaintenanceView() {
+  const loanContainer = document.getElementById('loanList');
+  const maintenanceContainer = document.getElementById('maintenanceList');
+  const countDisplay = document.getElementById('loanCount');
+  
+  if (currentMaintenanceStatusTab === '外借中') {
+    if (loanContainer) loanContainer.style.display = 'block';
+    if (maintenanceContainer) maintenanceContainer.style.display = 'none';
+    filterLoanByArea();
+  } else {
+    if (loanContainer) loanContainer.style.display = 'none';
+    if (maintenanceContainer) maintenanceContainer.style.display = 'block';
+    filterMaintenanceByArea();
+  }
+}
+
+function filterMaintenanceByArea() {
+  const maintenanceContainer = document.getElementById('maintenanceList');
+  const countDisplay = document.getElementById('loanCount');
+  
+  if (!currentLoanArea) {
+    displayMaintenanceList(allMaintenanceEquipment, maintenanceContainer, countDisplay);
+  } else {
+    const filtered = allMaintenanceEquipment.filter(equipment => {
+      const area = getEquipmentArea(equipment);
+      return area === currentLoanArea;
+    });
+    displayMaintenanceList(filtered, maintenanceContainer, countDisplay);
+  }
+}
+
+function displayMaintenanceList(equipmentList, container, countDisplay) {
+  if (equipmentList.length === 0) {
+    container.innerHTML = '<div class="loading">目前沒有維護中的輔具</div>';
+    if (countDisplay) countDisplay.textContent = '共 0 筆';
+    return;
+  }
+  
+  if (countDisplay) {
+    countDisplay.textContent = `共 ${equipmentList.length} 筆`;
+  }
+  
+  container.innerHTML = '';
+  
+  equipmentList.forEach(equipment => {
+    const card = createMaintenanceCard(equipment);
+    container.appendChild(card);
+  });
+}
+
+function createMaintenanceCard(equipment) {
+  const card = document.createElement('div');
+  card.className = 'equipment-card clickable-card';
+  
+  const area = getEquipmentArea(equipment);
+  
+  card.innerHTML = `
+    <div class="equipment-card-header">
+      <div>
+        <div class="equipment-card-title">${equipment.equipmentName || '未命名輔具'}</div>
+        <div class="equipment-card-id">${equipment.propertyId || '-'}</div>
+      </div>
+      <div class="header-badges">
+        <span class="status-badge" data-status="維護中">維護中</span>
+      </div>
+    </div>
+    <div class="equipment-card-body">
+      <div class="equipment-card-row">
+        <i class="fas fa-tag"></i>
+        <span>${equipment.category || '未分類'}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>${area} - ${equipment.location || ''}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-user"></i>
+        <span>${equipment.keeper || '-'}</span>
+      </div>
+      ${equipment.notes ? `
+      <div class="equipment-card-row">
+        <i class="fas fa-comment"></i>
+        <span>${equipment.notes}</span>
+      </div>
+      ` : ''}
+    </div>
+    <div class="equipment-card-footer">
+      <button class="btn btn-success btn-small complete-maintenance-btn" type="button">
+        <i class="fas fa-check"></i> 完成維護
+      </button>
+    </div>
+  `;
+  
+  card.addEventListener('click', function() {
+    openEquipmentDetailModal(equipment);
+  });
+  
+  const completeBtn = card.querySelector('.complete-maintenance-btn');
+  if (completeBtn) {
+    completeBtn.addEventListener('click', function(event) {
+      event.stopPropagation();
+      openCompleteMaintenanceModal(equipment);
+    });
+  }
+  
+  return card;
+}
+
+let currentCompleteMaintenanceEquipment = null;
+
+function openCompleteMaintenanceModal(equipment) {
+  currentCompleteMaintenanceEquipment = JSON.parse(JSON.stringify(equipment));
+  
+  const modal = document.getElementById('maintenanceModal');
+  if (!modal) return;
+  
+  const propertyIdEl = document.getElementById('maintenancePropertyId');
+  const nameEl = document.getElementById('maintenanceSelectedEquipmentName');
+  const idEl = document.getElementById('maintenanceSelectedEquipmentId');
+  const acceptDateEl = document.getElementById('maintenanceAcceptDate');
+  const completeDateEl = document.getElementById('maintenanceCompleteDate');
+  const notesEl = document.getElementById('maintenanceNotes');
+  
+  if (propertyIdEl) propertyIdEl.value = equipment.propertyId || '';
+  if (nameEl) nameEl.textContent = equipment.equipmentName || '未命名輔具';
+  if (idEl) idEl.textContent = equipment.propertyId || '';
+  if (acceptDateEl) acceptDateEl.value = '';
+  if (completeDateEl) completeDateEl.value = getCurrentDateTimeLocal();
+  if (notesEl) notesEl.value = '';
+  
+  const modalHeader = modal.querySelector('.modal-header h3');
+  if (modalHeader) {
+    modalHeader.innerHTML = '<i class="fas fa-check-circle"></i> 完成維護';
+  }
+  
+  const submitBtn = document.getElementById('submitMaintenanceBtn');
+  if (submitBtn) {
+    submitBtn.innerHTML = '<i class="fas fa-check"></i> 確認完成維護';
+  }
+  
+  modal.classList.add('active');
 }
 
 function setupLoanTabs() {

@@ -42,7 +42,10 @@
           <i class="fas fa-list"></i> 輔具清單
         </button>
         <button class="nav-tab" data-view="loan">
-          <i class="fas fa-handshake"></i> 外借管理
+          <i class="fas fa-handshake"></i> 外借/維護
+        </button>
+        <button class="nav-tab" data-view="dashboard">
+          <i class="fas fa-chart-pie"></i> 儀表板
         </button>
         <button class="nav-tab" data-view="report">
           <i class="fas fa-file-pdf"></i> 月報表
@@ -167,11 +170,11 @@
         </div>
       </div>
 
-      <!-- 外借管理頁面 -->
+      <!-- 外借/維護管理頁面 -->
       <div id="loanView" class="view">
         <div class="container">
-          <h2><i class="fas fa-handshake"></i> 外借管理</h2>
-          <p class="subtitle">目前外借中的輔具</p>
+          <h2><i class="fas fa-handshake"></i> 外借/維護管理</h2>
+          <p class="subtitle">目前外借中及維護中的輔具</p>
 
           <div class="loan-toolbar">
             <button id="openLoanWorkflowBtn" class="btn btn-primary">
@@ -179,6 +182,15 @@
             </button>
             <button id="openReturnWorkflowBtn" class="btn btn-secondary">
               <i class="fas fa-rotate-left"></i> 輔具歸還
+            </button>
+          </div>
+          
+          <div class="loan-status-tabs">
+            <button class="status-tab active" data-status="外借中">
+              <i class="fas fa-handshake"></i> 外借中
+            </button>
+            <button class="status-tab" data-status="維護中">
+              <i class="fas fa-wrench"></i> 維護中
             </button>
           </div>
           
@@ -194,6 +206,34 @@
           
           <div id="loanList" class="loan-list">
             <div class="loading">載入中...</div>
+          </div>
+          
+          <div id="maintenanceList" class="loan-list" style="display: none;">
+            <div class="loading">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 儀表板頁面 -->
+      <div id="dashboardView" class="view">
+        <div class="container">
+          <h2><i class="fas fa-chart-pie"></i> 盤點儀表板</h2>
+          <p class="subtitle">各區域輔具盤點進度總覽</p>
+          
+          <div class="dashboard-container">
+            <div class="dashboard-region">
+              <h3><i class="fas fa-map-marker-alt"></i> 屏中區</h3>
+              <div id="dashboardPinzhong" class="dashboard-staff-list">
+                <div class="loading">載入中...</div>
+              </div>
+            </div>
+            
+            <div class="dashboard-region">
+              <h3><i class="fas fa-map-marker-alt"></i> 屏北區</h3>
+              <div id="dashboardPinbeiguan" class="dashboard-staff-list">
+                <div class="loading">載入中...</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
