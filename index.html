@@ -392,6 +392,9 @@
             <button id="detailQuickLoanBtn" class="btn btn-primary" type="button">
               <i class="fas fa-right-left"></i> 直接外借
             </button>
+            <button id="detailMaintenanceBtn" class="btn btn-warning" type="button">
+              <i class="fas fa-wrench"></i> 進行維護
+            </button>
             <button id="cancelEquipmentDetailBtn" class="btn btn-secondary" type="button">關閉</button>
             <button id="saveEquipmentDetailBtn" class="btn btn-primary" type="button">
               <i class="fas fa-floppy-disk"></i> 儲存修改
@@ -623,6 +626,50 @@
               </button>
             </div>
           </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 維護 Modal -->
+    <div id="maintenanceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-wrench"></i> 進行維護</h3>
+          <button id="closeMaintenanceModalBtn" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="maintenance-selected-equipment">
+            <div id="maintenanceSelectedEquipmentName" class="maintenance-selected-equipment-name">尚未選擇輔具</div>
+            <div id="maintenanceSelectedEquipmentId" class="maintenance-selected-equipment-id"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="maintenancePropertyId">財產編號</label>
+            <input type="text" id="maintenancePropertyId" class="form-control" readonly>
+          </div>
+
+          <div class="form-group">
+            <label for="maintenanceAcceptDate">受理日期</label>
+            <input type="datetime-local" id="maintenanceAcceptDate" class="form-control" readonly>
+          </div>
+
+          <div class="form-group">
+            <label for="maintenanceCompleteDate">驗收日期（維護完成後填寫）</label>
+            <input type="datetime-local" id="maintenanceCompleteDate" class="form-control">
+            <small class="form-hint">有填寫驗收日期才算維護完成</small>
+          </div>
+
+          <div class="form-group">
+            <label for="maintenanceNotes">維護說明</label>
+            <textarea id="maintenanceNotes" class="form-control" rows="4" placeholder="請說明需要維護的原因或項目"></textarea>
+          </div>
+
+          <div class="button-group">
+            <button id="cancelMaintenanceBtn" class="btn btn-secondary" type="button">取消</button>
+            <button id="submitMaintenanceBtn" class="btn btn-primary" type="button">
+              <i class="fas fa-check"></i> 確認送件
+            </button>
+          </div>
         </div>
       </div>
     </div>

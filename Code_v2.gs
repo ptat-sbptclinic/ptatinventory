@@ -8,7 +8,8 @@ const SHEET_NAMES = {
   EQUIPMENT: '輔具清單',
   LOANS: '外借記錄',
   STAFF: '人員清單',
-  INVENTORY_LOG: '盤點記錄'
+  INVENTORY_LOG: '盤點記錄',
+  MAINTENANCE: '維護記錄'
 };
 
 // 輔具清單欄位索引（對應實際的 22 個欄位）
@@ -56,6 +57,17 @@ const LOAN_COLS = {
   CREATED_AT: 14,
   RETURN_STAFF_NAME: 15,
   RETURN_SIGNATURE_URL: 16
+};
+
+const MAINTENANCE_COLS = {
+  MAINTENANCE_ID: 0,
+  PROPERTY_ID: 1,
+  EQUIPMENT_NAME: 2,
+  ACCEPT_DATE: 3,
+  COMPLETE_DATE: 4,
+  NOTES: 5,
+  STAFF_NAME: 6,
+  CREATED_AT: 7
 };
 
 // ==========================================
@@ -110,6 +122,8 @@ function doPost(e) {
         return handleGenerateMonthlyMaintenanceReport(e);
       case 'generateMonthlyLoanReport':
         return handleGenerateMonthlyLoanReport(e);
+      case 'createMaintenance':
+        return handleCreateMaintenance(e);
       default:
         return createResponse(false, '未知的操作');
     }
@@ -1569,6 +1583,111 @@ function getOrCreateReportFolder() {
 
 function getOrCreatePhotoFolder() {
   return getOrCreateNestedFolder(['輔具盤點系統', '輔具照片']);
+}
+
+// ==========================================
+// 維護記錄功能
+// ==========================================
+
+function handleCreateMaintenance(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  const acceptDate = e.parameter.acceptDate || '';
+  const completeDate = e.parameter.completeDate || '';
+  const notes = String(e.parameter.notes || '').trim();
+  const staffName = e.parameter.staffName || '';
+
+  if (!propertyId) {
+    return createResponse(false, '請提供財產編號');
+  }
+
+  if (!notes) {
+    return createResponse(false, '請填寫維護說明');
+  }
+
+  const equipmentSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipmentSheet);
+  const equipmentData = equipmentSheet.getDataRange().getValues();
+
+  let equipmentRowIndex = -1;
+  let currentEquipment = null;
+
+  for (let i = 1; i < equipmentData.length; i++) {
+    if (normalizeIdentifier(equipmentData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
+      equipmentRowIndex = i + 1;
+      currentEquipment = equipmentData[i];
+      break;
+    }
+  }
+
+  if (equipmentRowIndex === -1) {
+    return createResponse(false, '找不到此財產編號對應的輔具');
+  }
+
+  const isComplete = !!completeDate;
+  const newStatus = isComplete ? '展示中' : '維護中';
+
+  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue(newStatus);
+  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+
+  const maintenanceSheet = getSheet(SHEET_NAMES.MAINTENANCE);
+  ensureMaintenanceSheetColumns(maintenanceSheet);
+
+  const maintenanceId = generateMaintenanceId();
+  const now = new Date();
+
+  const newRow = [
+    maintenanceId,
+    propertyId,
+    currentEquipment[EQUIPMENT_COLS.EQUIPMENT_NAME] || '',
+    acceptDate,
+    completeDate,
+    notes,
+    staffName,
+    formatDateTime(now)
+  ];
+
+  maintenanceSheet.appendRow(newRow);
+
+  return createResponse(true, isComplete ? '維護記錄已建立並完成驗收' : '維護記錄已建立，輔具已改為維護中', {
+    maintenanceId: maintenanceId,
+    propertyId: propertyId,
+    newStatus: newStatus
+  });
+}
+
+function generateMaintenanceId() {
+  const now = new Date();
+  const year = String(now.getFullYear()).slice(-2);
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  return `M${year}${month}${day}${random}`;
+}
+
+function ensureMaintenanceSheetColumns(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) {
+    const headers = [
+      '維護編號',
+      '財產編號',
+      '輔具名稱',
+      '受理日期',
+      '驗收日期',
+      '維護說明',
+      '申請人員',
+      '建立時間'
+    ];
+    sheet.appendRow(headers);
+  }
+}
+
+function getSheet(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  return sheet;
 }
 
 function createResponse(success, message, data = null) {

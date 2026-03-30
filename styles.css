@@ -328,6 +328,15 @@ textarea.form-control {
   background: #059669;
 }
 
+.btn-warning {
+  background: var(--warning-color);
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #D97706;
+}
+
 .btn-danger {
   background: var(--danger-color);
   color: white;
@@ -1293,6 +1302,31 @@ textarea.form-control {
 .loan-selected-equipment-id {
   margin-top: 0.25rem;
   color: var(--gray-600);
+}
+
+.maintenance-selected-equipment {
+  padding: 1rem;
+  background: var(--gray-100);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.maintenance-selected-equipment-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.maintenance-selected-equipment-id {
+  margin-top: 0.25rem;
+  color: var(--gray-600);
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--gray-500);
 }
 
 .loan-signature-summary {

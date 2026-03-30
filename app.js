@@ -699,6 +699,35 @@ function setupEventListeners() {
   if (submitReturnBtn) {
     submitReturnBtn.addEventListener('click', handleReturnLoanSubmit);
   }
+
+  const detailMaintenanceBtn = document.getElementById('detailMaintenanceBtn');
+  if (detailMaintenanceBtn) {
+    detailMaintenanceBtn.addEventListener('click', handleDetailMaintenance);
+  }
+
+  const closeMaintenanceModalBtn = document.getElementById('closeMaintenanceModalBtn');
+  if (closeMaintenanceModalBtn) {
+    closeMaintenanceModalBtn.addEventListener('click', closeMaintenanceModal);
+  }
+
+  const cancelMaintenanceBtn = document.getElementById('cancelMaintenanceBtn');
+  if (cancelMaintenanceBtn) {
+    cancelMaintenanceBtn.addEventListener('click', closeMaintenanceModal);
+  }
+
+  const submitMaintenanceBtn = document.getElementById('submitMaintenanceBtn');
+  if (submitMaintenanceBtn) {
+    submitMaintenanceBtn.addEventListener('click', handleSubmitMaintenance);
+  }
+
+  const maintenanceModal = document.getElementById('maintenanceModal');
+  if (maintenanceModal) {
+    maintenanceModal.addEventListener('click', function(event) {
+      if (event.target === maintenanceModal) {
+        closeMaintenanceModal();
+      }
+    });
+  }
 }
 
 // ==========================================
@@ -1505,6 +1534,106 @@ function handleDetailQuickInventory() {
       renderEquipmentDetailModal();
       loadEquipmentList();
       loadMyEquipment();
+    }
+  });
+}
+
+let currentMaintenanceEquipment = null;
+
+function handleDetailMaintenance() {
+  if (!currentEquipmentDetail) {
+    showToast('請先選擇輔具', 'error');
+    return;
+  }
+
+  if (currentEquipmentDetail.currentStatus === '維護中') {
+    showToast('此輔具已在維護中', 'warning');
+    return;
+  }
+
+  if (currentEquipmentDetail.currentStatus === '外借中') {
+    showToast('此輔具目前外借中，無法進行維護', 'error');
+    return;
+  }
+
+  currentMaintenanceEquipment = JSON.parse(JSON.stringify(currentEquipmentDetail));
+  openMaintenanceModal(currentEquipmentDetail);
+}
+
+function openMaintenanceModal(equipment) {
+  const modal = document.getElementById('maintenanceModal');
+  if (!modal) return;
+
+  const propertyIdEl = document.getElementById('maintenancePropertyId');
+  const nameEl = document.getElementById('maintenanceSelectedEquipmentName');
+  const idEl = document.getElementById('maintenanceSelectedEquipmentId');
+  const acceptDateEl = document.getElementById('maintenanceAcceptDate');
+  const completeDateEl = document.getElementById('maintenanceCompleteDate');
+  const notesEl = document.getElementById('maintenanceNotes');
+
+  if (propertyIdEl) propertyIdEl.value = equipment.propertyId || '';
+  if (nameEl) nameEl.textContent = equipment.equipmentName || '未命名輔具';
+  if (idEl) idEl.textContent = equipment.propertyId || '';
+  if (acceptDateEl) acceptDateEl.value = getCurrentDateTimeLocal();
+  if (completeDateEl) completeDateEl.value = '';
+  if (notesEl) notesEl.value = '';
+
+  modal.classList.add('active');
+}
+
+function closeMaintenanceModal() {
+  const modal = document.getElementById('maintenanceModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+  currentMaintenanceEquipment = null;
+}
+
+function getCurrentDateTimeLocal() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function handleSubmitMaintenance() {
+  if (!currentMaintenanceEquipment) {
+    showToast('請先選擇輔具', 'error');
+    return;
+  }
+
+  const propertyId = currentMaintenanceEquipment.propertyId;
+  const acceptDate = document.getElementById('maintenanceAcceptDate').value;
+  const completeDate = document.getElementById('maintenanceCompleteDate').value;
+  const notes = document.getElementById('maintenanceNotes').value.trim();
+
+  if (!notes) {
+    showToast('請填寫維護說明', 'error');
+    return;
+  }
+
+  callAPI('createMaintenance', {
+    propertyId: propertyId,
+    acceptDate: acceptDate,
+    completeDate: completeDate,
+    notes: notes,
+    staffName: currentUser ? currentUser.name : ''
+  }, function(response) {
+    if (response.success) {
+      if (completeDate) {
+        showToast('維護記錄已建立並完成驗收', 'success');
+      } else {
+        showToast('維護記錄已建立，輔具已改為維護中', 'success');
+      }
+      closeMaintenanceModal();
+      closeEquipmentDetailModal();
+      loadEquipmentList();
+      loadMyEquipment();
+    } else {
+      showToast(response.message || '建立維護記錄失敗', 'error');
     }
   });
 }
