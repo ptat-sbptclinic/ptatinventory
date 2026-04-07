@@ -1464,7 +1464,10 @@ function openEquipmentDetailModal(equipment) {
       if (response.success && response.data) {
         const select = document.getElementById('detailScrapDocStatus');
         if (select) {
-          select.value = response.data.documentStatus || '等待縣府文件';
+          const docStatus = response.data.documentStatus || '等待縣府文件';
+          select.value = docStatus;
+          // 已完成的狀態不可再修改
+          select.disabled = docStatus !== '等待縣府文件';
         }
       }
     });
@@ -1586,7 +1589,15 @@ function handleSaveEquipmentDetail() {
 
   if (isScraped) {
     const notes = document.getElementById('detailNotesInput').value.trim();
-    const scrapDocStatus = document.getElementById('detailScrapDocStatus').value;
+    const scrapDocSelect = document.getElementById('detailScrapDocStatus');
+    const scrapDocStatus = scrapDocSelect ? scrapDocSelect.value : '等待縣府文件';
+
+    // 若使用者將縣府文件狀態改為完成狀態，需二次確認
+    if (scrapDocSelect && !scrapDocSelect.disabled && scrapDocStatus !== '等待縣府文件') {
+      if (!confirm('此動作完成後此筆資料將無法再修改，請確認備註內容已填寫報廢相關資訊。')) {
+        return;
+      }
+    }
 
     callAPI('updateEquipmentDetails', {
       propertyId: currentEquipmentDetail.propertyId,
@@ -1609,6 +1620,11 @@ function handleSaveEquipmentDetail() {
       }, function(scrapResponse) {
         renderEquipmentDetailModal();
         if (scrapResponse.success) {
+          // 若已改為完成狀態，立即鎖定下拉選單
+          if (scrapDocStatus !== '等待縣府文件') {
+            const select = document.getElementById('detailScrapDocStatus');
+            if (select) select.disabled = true;
+          }
           showToast('資料已更新', 'success');
         } else {
           showToast(scrapResponse.message || '縣府文件狀態更新失敗', 'error');
