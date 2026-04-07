@@ -987,6 +987,7 @@ function createEquipmentCard(equipment, searchTerm = '') {
   const inventoryClass = isInventoried ? 'inventoried' : 'not-inventoried';
   const inventoryText = isInventoried ? '已盤點' : '未盤點';
   const isLoaned = equipment.currentStatus === '外借中';
+  const isScraped = equipment.currentStatus === '已報廢';
 
   card.innerHTML = `
     <div class="equipment-card-header">
@@ -1019,6 +1020,7 @@ function createEquipmentCard(equipment, searchTerm = '') {
       </div>
       ` : ''}
     </div>
+    ${isScraped ? '' : `
     <div class="equipment-card-footer">
       <button class="btn btn-primary btn-small quick-loan-btn" type="button" ${isLoaned ? 'disabled' : ''}>
         <i class="fas fa-right-left"></i> ${isLoaned ? '已外借' : '直接外借'}
@@ -1027,6 +1029,7 @@ function createEquipmentCard(equipment, searchTerm = '') {
         <i class="fas fa-check"></i> 完成盤點
       </button>
     </div>
+    `}
   `;
 
   card.addEventListener('click', function() {
@@ -1455,6 +1458,17 @@ function openEquipmentDetailModal(equipment) {
 
   renderEquipmentDetailModal();
   modal.classList.add('active');
+
+  if (currentEquipmentDetail.currentStatus === '已報廢') {
+    callAPI('getScrapByPropertyId', { propertyId: currentEquipmentDetail.propertyId }, function(response) {
+      if (response.success && response.data) {
+        const select = document.getElementById('detailScrapDocStatus');
+        if (select) {
+          select.value = response.data.documentStatus || '等待縣府文件';
+        }
+      }
+    });
+  }
 }
 
 function closeEquipmentDetailModal() {
@@ -1532,18 +1546,77 @@ function renderEquipmentDetailModal() {
   if (cleanCheckbox) cleanCheckbox.checked = actionFlags.clean;
   if (chargeCheckbox) chargeCheckbox.checked = actionFlags.charge;
 
+  const isScraped = currentEquipmentDetail.currentStatus === '已報廢';
+
+  // 已報廢：隱藏動作按鈕、鎖定非備註欄位、顯示縣府文件狀態下拉選單
+  const detailQuickInventoryBtn = document.getElementById('detailQuickInventoryBtn');
+  const detailMaintenanceBtn = document.getElementById('detailMaintenanceBtn');
+  const scrapDocGroup = document.getElementById('detailScrapDocStatusGroup');
+
+  if (detailQuickInventoryBtn) detailQuickInventoryBtn.style.display = isScraped ? 'none' : '';
+  if (detailMaintenanceBtn) detailMaintenanceBtn.style.display = isScraped ? 'none' : '';
+  if (scrapDocGroup) scrapDocGroup.style.display = isScraped ? '' : 'none';
+
+  if (keeperInput) keeperInput.disabled = isScraped;
+  if (locationInput) locationInput.disabled = isScraped;
+  if (cleanCheckbox) cleanCheckbox.disabled = isScraped;
+  if (chargeCheckbox) chargeCheckbox.disabled = isScraped;
+
   if (detailQuickLoanBtn) {
-    const isLoaned = currentEquipmentDetail.currentStatus === '外借中';
-    detailQuickLoanBtn.disabled = isLoaned;
-    detailQuickLoanBtn.innerHTML = isLoaned
-      ? '<i class="fas fa-right-left"></i> 已外借'
-      : '<i class="fas fa-right-left"></i> 直接外借';
+    if (isScraped) {
+      detailQuickLoanBtn.style.display = 'none';
+    } else {
+      detailQuickLoanBtn.style.display = '';
+      const isLoaned = currentEquipmentDetail.currentStatus === '外借中';
+      detailQuickLoanBtn.disabled = isLoaned;
+      detailQuickLoanBtn.innerHTML = isLoaned
+        ? '<i class="fas fa-right-left"></i> 已外借'
+        : '<i class="fas fa-right-left"></i> 直接外借';
+    }
   }
 }
 
 function handleSaveEquipmentDetail() {
   if (!currentEquipmentDetail) {
     showToast('請先選擇輔具', 'error');
+    return;
+  }
+
+  const isScraped = currentEquipmentDetail.currentStatus === '已報廢';
+
+  if (isScraped) {
+    const notes = document.getElementById('detailNotesInput').value.trim();
+    const scrapDocStatus = document.getElementById('detailScrapDocStatus').value;
+
+    callAPI('updateEquipmentDetails', {
+      propertyId: currentEquipmentDetail.propertyId,
+      keeper: currentEquipmentDetail.keeper || '',
+      location: currentEquipmentDetail.location || '',
+      currentAction: currentEquipmentDetail.currentAction || '',
+      notes: notes
+    }, function(response) {
+      if (!response.success || !response.data) {
+        showToast(response.message || '輔具資料更新失敗', 'error');
+        return;
+      }
+
+      syncUpdatedEquipment(response.data);
+      currentEquipmentDetail = JSON.parse(JSON.stringify(response.data));
+
+      callAPI('updateScrapDocumentStatus', {
+        propertyId: currentEquipmentDetail.propertyId,
+        documentStatus: scrapDocStatus
+      }, function(scrapResponse) {
+        renderEquipmentDetailModal();
+        if (scrapResponse.success) {
+          showToast('資料已更新', 'success');
+        } else {
+          showToast(scrapResponse.message || '縣府文件狀態更新失敗', 'error');
+        }
+        loadEquipmentList();
+        loadMyEquipment();
+      });
+    });
     return;
   }
 

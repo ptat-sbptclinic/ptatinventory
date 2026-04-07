@@ -140,6 +140,10 @@ function doPost(e) {
         return handleCompleteMaintenance(e);
       case 'createScrap':
         return handleCreateScrap(e);
+      case 'getScrapByPropertyId':
+        return handleGetScrapByPropertyId(e);
+      case 'updateScrapDocumentStatus':
+        return handleUpdateScrapDocumentStatus(e);
       default:
         return createResponse(false, '未知的操作');
     }
@@ -1844,6 +1848,57 @@ function ensureScrapSheetColumns(sheet) {
     ];
     sheet.appendRow(headers);
   }
+}
+
+function handleGetScrapByPropertyId(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  if (!propertyId) return createResponse(false, '請提供財產編號');
+
+  const scrapSheet = getSheet(SHEET_NAMES.SCRAP);
+  const data = scrapSheet.getDataRange().getValues();
+
+  // 從最後一筆往前找，取最新的報廢紀錄
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (normalizeIdentifier(String(data[i][SCRAP_COLS.PROPERTY_ID])) === propertyId) {
+      return createResponse(true, '查詢成功', {
+        scrapId: data[i][SCRAP_COLS.SCRAP_ID],
+        propertyId: data[i][SCRAP_COLS.PROPERTY_ID],
+        equipmentName: data[i][SCRAP_COLS.EQUIPMENT_NAME],
+        scrapDate: data[i][SCRAP_COLS.SCRAP_DATE],
+        scrapReason: data[i][SCRAP_COLS.SCRAP_REASON],
+        staffName: data[i][SCRAP_COLS.STAFF_NAME],
+        documentStatus: data[i][SCRAP_COLS.DOCUMENT_STATUS],
+        createdAt: data[i][SCRAP_COLS.CREATED_AT]
+      });
+    }
+  }
+
+  return createResponse(false, '找不到此財產編號的報廢紀錄');
+}
+
+function handleUpdateScrapDocumentStatus(e) {
+  const propertyId = normalizeIdentifier(e.parameter.propertyId);
+  const documentStatus = String(e.parameter.documentStatus || '').trim();
+
+  if (!propertyId) return createResponse(false, '請提供財產編號');
+  if (!documentStatus) return createResponse(false, '請提供縣府文件狀態');
+
+  const validStatuses = ['等待縣府文件', '已收到縣府公文，完成報廢', '輔具中心流程已完備，完成報廢'];
+  if (!validStatuses.includes(documentStatus)) {
+    return createResponse(false, '無效的縣府文件狀態');
+  }
+
+  const scrapSheet = getSheet(SHEET_NAMES.SCRAP);
+  const data = scrapSheet.getDataRange().getValues();
+
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (normalizeIdentifier(String(data[i][SCRAP_COLS.PROPERTY_ID])) === propertyId) {
+      scrapSheet.getRange(i + 1, SCRAP_COLS.DOCUMENT_STATUS + 1).setValue(documentStatus);
+      return createResponse(true, '縣府文件狀態已更新', { documentStatus: documentStatus });
+    }
+  }
+
+  return createResponse(false, '找不到此財產編號的報廢紀錄');
 }
 
 function getSheet(name) {
