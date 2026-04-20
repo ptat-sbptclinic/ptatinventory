@@ -57,7 +57,8 @@ const LOAN_COLS = {
   NOTES: 13,
   CREATED_AT: 14,
   RETURN_STAFF_NAME: 15,
-  RETURN_SIGNATURE_URL: 16
+  RETURN_SIGNATURE_URL: 16,
+  BATCH_ID: 17
 };
 
 const MAINTENANCE_COLS = {
@@ -122,12 +123,16 @@ function doPost(e) {
         return handleUploadPhoto(e);
       case 'createLoan':
         return handleCreateLoan(e);
+      case 'createBatchLoan':
+        return handleCreateBatchLoan(e);
       case 'getLoanList':
         return handleGetLoanList(e);
       case 'getActiveLoanByPropertyId':
         return handleGetActiveLoanByPropertyId(e);
       case 'returnLoan':
         return handleReturnLoan(e);
+      case 'returnBatchLoan':
+        return handleReturnBatchLoan(e);
       case 'getStaffList':
         return handleGetStaffList(e);
       case 'generateMonthlyMaintenanceReport':
@@ -527,15 +532,160 @@ function handleCreateLoan(e) {
     notes,                     // 備註
     now,                       // 建立日期
     '',                        // 歸還經辦人員
-    ''                         // 歸還簽名圖片
+    '',                        // 歸還簽名圖片
+    ''                         // 批次編號（單筆外借無批次）
   ]);
-  
+
   // 更新輔具狀態為「外借中」
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
-  
+
   return createResponse(true, '外借記錄建立成功', { loanId: loanId });
+}
+
+function handleCreateBatchLoan(e) {
+  const propertyIdsParam = e.parameter.propertyIds || '';
+  const borrower = e.parameter.borrower;
+  const contactPerson = e.parameter.contactPerson || borrower;
+  const contactPhone = e.parameter.contactPhone || '';
+  const loanStartDate = e.parameter.loanStartDate;
+  const expectedReturnDate = e.parameter.expectedReturnDate;
+  const staffName = e.parameter.staffName;
+  const signatureData = e.parameter.signatureData;
+  const purpose = e.parameter.purpose || '';
+  const notes = e.parameter.notes || '';
+
+  let propertyIds = [];
+  try {
+    propertyIds = JSON.parse(propertyIdsParam);
+  } catch(err) {
+    return createResponse(false, '輔具清單格式錯誤');
+  }
+
+  if (!propertyIds || !propertyIds.length) {
+    return createResponse(false, '請至少選擇一件輔具');
+  }
+
+  if (!borrower || !loanStartDate || !expectedReturnDate || !purpose) {
+    return createResponse(false, '請提供必要資訊');
+  }
+
+  const loanDate = parseDateInput(loanStartDate);
+  if (!loanDate) {
+    return createResponse(false, '借用起始日格式錯誤');
+  }
+
+  const returnDate = parseDateInput(expectedReturnDate);
+  if (!returnDate) {
+    return createResponse(false, '預計歸還日格式錯誤');
+  }
+
+  if (returnDate.getTime() < loanDate.getTime()) {
+    return createResponse(false, '預計歸還日不能早於借用起始日');
+  }
+
+  // 找出所有輔具的列號並檢查是否可外借
+  const equipSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipSheet);
+  const equipData = equipSheet.getDataRange().getValues();
+
+  const equipmentInfo = [];
+  for (let idx = 0; idx < propertyIds.length; idx++) {
+    const pid = normalizeIdentifier(propertyIds[idx]);
+    if (!pid) continue;
+    let found = false;
+    for (let i = 1; i < equipData.length; i++) {
+      if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === pid) {
+        if (equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] === '外借中') {
+          return createResponse(false, '輔具 ' + pid + ' 目前已外借，請移除後再送出');
+        }
+        equipmentInfo.push({
+          propertyId: pid,
+          equipmentName: equipData[i][EQUIPMENT_COLS.EQUIPMENT_NAME] || '',
+          rowIndex: i + 1
+        });
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      return createResponse(false, '找不到輔具 ' + pid);
+    }
+  }
+
+  if (!equipmentInfo.length) {
+    return createResponse(false, '請至少選擇一件輔具');
+  }
+
+  // 所有項目共用同一張簽名圖（上傳一次）
+  let signatureUrl = '';
+  if (signatureData) {
+    try {
+      const blob = Utilities.newBlob(
+        Utilities.base64Decode(signatureData.split(',')[1]),
+        'image/png',
+        'signature_batch_' + new Date().getTime() + '.png'
+      );
+      const folder = getOrCreateNestedFolder(['輔具盤點系統', '外借簽名']);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      signatureUrl = file.getUrl();
+    } catch(error) {
+      Logger.log('批次簽名上傳失敗: ' + error.message);
+    }
+  }
+
+  const loanSheet = getSheet(SHEET_NAMES.LOANS);
+  ensureLoanSheetColumns(loanSheet);
+  const now = new Date();
+  const timestampStr = Utilities.formatDate(now, 'GMT+8', 'yyyyMMddHHmmss');
+  const batchId = 'BATCH-' + timestampStr;
+
+  const rows = [];
+  const loanIds = [];
+  for (let idx = 0; idx < equipmentInfo.length; idx++) {
+    const info = equipmentInfo[idx];
+    const loanId = 'LOAN-' + timestampStr + '-' + String(idx + 1).padStart(2, '0');
+    loanIds.push(loanId);
+    rows.push([
+      loanId,
+      info.propertyId,
+      info.equipmentName,
+      borrower,
+      contactPerson,
+      contactPhone,
+      loanDate,
+      returnDate,
+      '',
+      '外借中',
+      staffName,
+      signatureUrl,
+      purpose,
+      notes,
+      now,
+      '',
+      '',
+      batchId
+    ]);
+  }
+
+  const startRow = loanSheet.getLastRow() + 1;
+  loanSheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+
+  // 更新每件輔具狀態為「外借中」
+  for (let i = 0; i < equipmentInfo.length; i++) {
+    const row = equipmentInfo[i].rowIndex;
+    equipSheet.getRange(row, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
+    equipSheet.getRange(row, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+    equipSheet.getRange(row, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+  }
+
+  return createResponse(true, '批次外借建立成功', {
+    batchId: batchId,
+    loanIds: loanIds,
+    count: rows.length
+  });
 }
 
 function handleGetLoanList(e) {
@@ -589,10 +739,11 @@ function handleGetLoanList(e) {
       purpose: row[LOAN_COLS.PURPOSE],
       notes: row[LOAN_COLS.NOTES],
       returnStaffName: row[LOAN_COLS.RETURN_STAFF_NAME],
-      returnSignatureUrl: row[LOAN_COLS.RETURN_SIGNATURE_URL]
+      returnSignatureUrl: row[LOAN_COLS.RETURN_SIGNATURE_URL],
+      batchId: row[LOAN_COLS.BATCH_ID] || ''
     });
   }
-  
+
   return createResponse(true, '查詢成功', loanList);
 }
 
@@ -667,7 +818,8 @@ function handleGetActiveLoanByPropertyId(e) {
       purpose: row[LOAN_COLS.PURPOSE],
       notes: row[LOAN_COLS.NOTES],
       returnStaffName: row[LOAN_COLS.RETURN_STAFF_NAME],
-      returnSignatureUrl: row[LOAN_COLS.RETURN_SIGNATURE_URL]
+      returnSignatureUrl: row[LOAN_COLS.RETURN_SIGNATURE_URL],
+      batchId: row[LOAN_COLS.BATCH_ID] || ''
     });
   }
 
@@ -804,8 +956,98 @@ function handleReturnLoan(e) {
       break;
     }
   }
-  
+
   return createResponse(true, '歸還成功');
+}
+
+function handleReturnBatchLoan(e) {
+  const batchId = String(e.parameter.batchId || '').trim();
+  const actualReturnDate = e.parameter.actualReturnDate;
+  const staffName = e.parameter.staffName || '';
+  const signatureData = e.parameter.signatureData || '';
+
+  if (!batchId || !actualReturnDate || !staffName) {
+    return createResponse(false, '請提供必要資訊');
+  }
+
+  const returnDate = parseDateInput(actualReturnDate);
+  if (!returnDate) {
+    return createResponse(false, '實際歸還日期格式錯誤');
+  }
+
+  const loanSheet = getSheet(SHEET_NAMES.LOANS);
+  ensureLoanSheetColumns(loanSheet);
+  const loanData = loanSheet.getDataRange().getValues();
+
+  // 找出批次中所有仍在外借中的記錄
+  const targetRows = [];
+  for (let i = 1; i < loanData.length; i++) {
+    const row = loanData[i];
+    if (String(row[LOAN_COLS.BATCH_ID] || '').trim() !== batchId) continue;
+    if (row[LOAN_COLS.STATUS] !== '外借中') continue;
+
+    const rowLoanDate = parseSheetDateValue(row[LOAN_COLS.LOAN_DATE]);
+    if (rowLoanDate && returnDate.getTime() < rowLoanDate.getTime()) {
+      return createResponse(false, '實際歸還日期不能早於借出日期');
+    }
+
+    targetRows.push({
+      rowIndex: i + 1,
+      propertyId: row[LOAN_COLS.PROPERTY_ID]
+    });
+  }
+
+  if (!targetRows.length) {
+    return createResponse(false, '找不到此批次的外借中記錄');
+  }
+
+  const now = new Date();
+
+  // 所有項目共用同一張歸還簽名圖
+  let returnSignatureUrl = '';
+  if (signatureData) {
+    try {
+      const blob = Utilities.newBlob(
+        Utilities.base64Decode(signatureData.split(',')[1]),
+        'image/png',
+        'return_signature_batch_' + batchId + '_' + new Date().getTime() + '.png'
+      );
+      const folder = getOrCreateNestedFolder(['輔具盤點系統', '歸還簽名']);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      returnSignatureUrl = file.getUrl();
+    } catch(error) {
+      Logger.log('批次歸還簽名上傳失敗: ' + error.message);
+    }
+  }
+
+  // 更新每筆外借記錄
+  for (let i = 0; i < targetRows.length; i++) {
+    const row = targetRows[i].rowIndex;
+    loanSheet.getRange(row, LOAN_COLS.ACTUAL_RETURN_DATE + 1).setValue(returnDate);
+    loanSheet.getRange(row, LOAN_COLS.STATUS + 1).setValue('已歸還');
+    loanSheet.getRange(row, LOAN_COLS.RETURN_STAFF_NAME + 1).setValue(staffName);
+    loanSheet.getRange(row, LOAN_COLS.RETURN_SIGNATURE_URL + 1).setValue(returnSignatureUrl);
+  }
+
+  // 更新每件輔具狀態為「展示中」
+  const equipSheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  ensureEquipmentSheetColumns(equipSheet);
+  const equipData = equipSheet.getDataRange().getValues();
+
+  for (let t = 0; t < targetRows.length; t++) {
+    const targetPid = normalizeIdentifier(targetRows[t].propertyId);
+    for (let i = 1; i < equipData.length; i++) {
+      if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === targetPid) {
+        equipSheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
+        equipSheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+        equipSheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+        break;
+      }
+    }
+  }
+
+  return createResponse(true, '批次歸還成功', { count: targetRows.length });
 }
 
 function handleGenerateMonthlyLoanReport(e) {
@@ -1501,7 +1743,8 @@ function initializeSheet(sheet, sheetName) {
     case SHEET_NAMES.LOANS:
       headers = ['外借編號', '財產編號', '輔具品名', '借用人/單位', '聯絡人', '聯絡電話',
                   '外借日期', '預計歸還日期', '實際歸還日期', '外借狀態', '經辦人員',
-                  '簽名圖片', '外借用途', '備註', '建立日期', '歸還經辦人員', '歸還簽名圖片'];
+                  '簽名圖片', '外借用途', '備註', '建立日期', '歸還經辦人員', '歸還簽名圖片',
+                  '批次編號'];
       break;
     case SHEET_NAMES.STAFF:
       headers = ['姓名', '區域', '權限', '狀態'];
@@ -1523,7 +1766,8 @@ function initializeSheet(sheet, sheetName) {
 function ensureLoanSheetColumns(sheet) {
   const expectedHeaders = ['外借編號', '財產編號', '輔具品名', '借用人/單位', '聯絡人', '聯絡電話',
     '外借日期', '預計歸還日期', '實際歸還日期', '外借狀態', '經辦人員',
-    '簽名圖片', '外借用途', '備註', '建立日期', '歸還經辦人員', '歸還簽名圖片'];
+    '簽名圖片', '外借用途', '備註', '建立日期', '歸還經辦人員', '歸還簽名圖片',
+    '批次編號'];
 
   if (sheet.getLastRow() === 0) {
     initializeSheet(sheet, SHEET_NAMES.LOANS);

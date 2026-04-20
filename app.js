@@ -17,12 +17,14 @@ let isLoanScannerRunning = false;
 let isProcessingLoanScan = false;
 let lastLoanScannedCode = '';
 let currentLoanEquipment = null;
+let currentLoanCart = [];
 let currentLoanDraft = null;
 let returnQrCode = null;
 let isReturnScannerRunning = false;
 let isProcessingReturnScan = false;
 let lastReturnScannedCode = '';
 let currentReturnLoan = null;
+let currentReturnBatch = null;
 let currentReturnDraft = null;
 let currentReturnEquipment = null;
 let currentReturnMode = 'standard';
@@ -580,7 +582,19 @@ function setupEventListeners() {
   if (loanBackToScanBtn) {
     loanBackToScanBtn.addEventListener('click', function() {
       setLoanWorkflowStep('scan');
-      startLoanBarcodeScanner();
+    });
+  }
+
+  const loanProceedToFormBtn = document.getElementById('loanProceedToFormBtn');
+  if (loanProceedToFormBtn) {
+    loanProceedToFormBtn.addEventListener('click', function() {
+      if (!currentLoanCart.length) {
+        showToast('請先加入至少一件輔具', 'error');
+        return;
+      }
+      stopLoanBarcodeScanner();
+      renderLoanCartForm();
+      setLoanWorkflowStep('form');
     });
   }
 
@@ -690,6 +704,11 @@ function setupEventListeners() {
   const returnBackToLookupBtn = document.getElementById('returnBackToLookupBtn');
   if (returnBackToLookupBtn) {
     returnBackToLookupBtn.addEventListener('click', function() {
+      // 批次歸還沒有查詢步驟，直接關閉視窗
+      if (currentReturnBatch) {
+        closeReturnWorkflow();
+        return;
+      }
       setReturnWorkflowStep('lookup');
       startReturnBarcodeScanner();
     });
@@ -2157,23 +2176,47 @@ function loadLoanList() {
   
   callAPI('getEquipmentList', { area: '', currentStatus: '' }, function(response) {
     if (response.success) {
-      allLoanEquipment = response.data.filter(equipment => {
+      const loanEquipment = response.data.filter(equipment => {
         return equipment.currentDynamic && equipment.currentDynamic.includes('外借中');
       });
-      
+
       allMaintenanceEquipment = response.data.filter(equipment => {
         return equipment.currentDynamic && equipment.currentDynamic.includes('維護中');
       });
-      
+
       allScrapEquipment = response.data.filter(equipment => {
         return equipment.currentDynamic && equipment.currentDynamic.includes('已報廢');
       });
-      
-      console.log('外借中的輔具總數:', allLoanEquipment.length);
-      console.log('維護中的輔具總數:', allMaintenanceEquipment.length);
-      console.log('已報廢的輔具總數:', allScrapEquipment.length);
-      
-      updateLoanMaintenanceView();
+
+      // 取得外借記錄以合併 batchId / 借用人等資訊
+      callAPI('getLoanList', { status: '外借中' }, function(loanResp) {
+        const loanMap = {};
+        if (loanResp.success && Array.isArray(loanResp.data)) {
+          loanResp.data.forEach(function(loan) {
+            const key = normalizeIdentifier(loan.propertyId);
+            if (!key) return;
+            loanMap[key] = loan;
+          });
+        }
+        allLoanEquipment = loanEquipment.map(function(e) {
+          const loan = loanMap[normalizeIdentifier(e.propertyId)];
+          if (loan) {
+            e.batchId = loan.batchId || '';
+            e.loanId = loan.loanId || '';
+            e.loanBorrower = loan.borrower || '';
+            e.loanDate = loan.loanDate || '';
+            e.loanExpectedReturnDate = loan.expectedReturnDate || '';
+            e.loanPurpose = loan.purpose || '';
+          }
+          return e;
+        });
+
+        console.log('外借中的輔具總數:', allLoanEquipment.length);
+        console.log('維護中的輔具總數:', allMaintenanceEquipment.length);
+        console.log('已報廢的輔具總數:', allScrapEquipment.length);
+
+        updateLoanMaintenanceView();
+      });
     } else {
       listContainer.innerHTML = '<div class="loading">載入失敗</div>';
       showToast('載入外借清單失敗', 'error');
@@ -2553,17 +2596,87 @@ function displayLoanList(loanList, container, countDisplay) {
     if (countDisplay) countDisplay.textContent = '共 0 筆';
     return;
   }
-  
+
   if (countDisplay) {
     countDisplay.textContent = `共 ${loanList.length} 筆`;
   }
-  
+
   container.innerHTML = '';
-  
-  loanList.forEach(equipment => {
-    const card = createLoanCard(equipment);
-    container.appendChild(card);
+
+  // 依 batchId 分組；同一批有多件才顯示為批次卡片，否則照單筆顯示
+  const groupsOrder = [];
+  const batchMap = {};
+  loanList.forEach(function(equipment) {
+    const bid = String(equipment.batchId || '').trim();
+    if (!bid) {
+      groupsOrder.push({ batchId: '', items: [equipment] });
+      return;
+    }
+    if (batchMap[bid]) {
+      batchMap[bid].items.push(equipment);
+    } else {
+      const group = { batchId: bid, items: [equipment] };
+      batchMap[bid] = group;
+      groupsOrder.push(group);
+    }
   });
+
+  groupsOrder.forEach(function(group) {
+    if (group.items.length > 1) {
+      container.appendChild(createBatchLoanCard(group));
+    } else {
+      container.appendChild(createLoanCard(group.items[0]));
+    }
+  });
+}
+
+function createBatchLoanCard(group) {
+  const card = document.createElement('div');
+  card.className = 'equipment-card clickable-card';
+
+  const first = group.items[0];
+  const itemsPreview = group.items.slice(0, 4).map(function(item) {
+    return `<li>${item.equipmentName} <span class="loan-cart-item-id">${item.propertyId}</span></li>`;
+  }).join('');
+  const more = group.items.length > 4 ? `<li>…（共 ${group.items.length} 件）</li>` : '';
+
+  card.innerHTML = `
+    <div class="equipment-card-header">
+      <div>
+        <div class="equipment-card-title"><i class="fas fa-boxes-stacked"></i> 批次外借 · ${group.items.length} 件</div>
+        <div class="equipment-card-id">${first.batchId}</div>
+      </div>
+      <span class="status-badge" data-status="外借中">外借中</span>
+    </div>
+    <div class="equipment-card-body">
+      <div class="equipment-card-row">
+        <i class="fas fa-user"></i>
+        <span>借用人：${first.loanBorrower || '—'}</span>
+      </div>
+      <div class="equipment-card-row">
+        <i class="fas fa-calendar"></i>
+        <span>借用期間：${formatDisplayDateTime(first.loanDate)} ~ ${formatDisplayDateTime(first.loanExpectedReturnDate)}</span>
+      </div>
+      ${first.loanPurpose ? `
+      <div class="equipment-card-row">
+        <i class="fas fa-bullseye"></i>
+        <span>用途：${first.loanPurpose}</span>
+      </div>
+      ` : ''}
+      <ul class="loan-batch-preview">${itemsPreview}${more}</ul>
+    </div>
+    <div class="equipment-card-footer">
+      <button class="btn btn-secondary btn-small" type="button">
+        <i class="fas fa-rotate-left"></i> 批次歸還
+      </button>
+    </div>
+  `;
+
+  card.addEventListener('click', function() {
+    openBatchReturnWorkflow(group);
+  });
+
+  return card;
 }
 
 function createLoanCard(equipment) {
@@ -2648,13 +2761,11 @@ function openLoanWorkflowWithEquipment(equipment) {
 
   switchView('loan');
   openLoanWorkflow();
-  currentLoanEquipment = equipment;
-  populateLoanEquipment(equipment);
-  setLoanWorkflowStep('form');
+  addEquipmentToLoanCart(equipment);
 
   const manualPropertyInput = document.getElementById('loanManualPropertyId');
   if (manualPropertyInput) {
-    manualPropertyInput.value = equipment.propertyId;
+    manualPropertyInput.value = '';
   }
 
   const resultDiv = document.getElementById('loanScanResult');
@@ -2676,6 +2787,7 @@ function closeLoanWorkflow() {
 
 function resetLoanWorkflow() {
   currentLoanEquipment = null;
+  currentLoanCart = [];
   currentLoanDraft = null;
   isProcessingLoanScan = false;
   lastLoanScannedCode = '';
@@ -2691,10 +2803,6 @@ function resetLoanWorkflow() {
   const startDateInput = document.getElementById('loanStartDate');
   const returnDateInput = document.getElementById('loanExpectedReturnDate');
   const purposeInput = document.getElementById('loanPurpose');
-  const equipmentName = document.getElementById('loanSelectedEquipmentName');
-  const equipmentId = document.getElementById('loanSelectedEquipmentId');
-  const equipmentPhotoWrapper = document.getElementById('loanSelectedEquipmentPhotoWrapper');
-  const equipmentPhoto = document.getElementById('loanSelectedEquipmentPhoto');
   const signatureSummary = document.getElementById('loanSignatureSummary');
 
   if (borrowerInput) borrowerInput.value = '';
@@ -2702,15 +2810,9 @@ function resetLoanWorkflow() {
   if (startDateInput) startDateInput.value = getCurrentDateTimeLocalString();
   if (returnDateInput) returnDateInput.value = '';
   if (purposeInput) purposeInput.value = '';
-  if (equipmentName) equipmentName.textContent = '尚未掃描';
-  if (equipmentId) equipmentId.textContent = '';
-  if (equipmentPhotoWrapper) equipmentPhotoWrapper.style.display = 'none';
-  if (equipmentPhoto) {
-    equipmentPhoto.removeAttribute('src');
-    equipmentPhoto.onerror = null;
-    equipmentPhoto.style.display = 'none';
-  }
   if (signatureSummary) signatureSummary.innerHTML = '';
+
+  renderLoanCart();
 
   if (typeof clearSignature === 'function') {
     clearSignature('loanSignatureCanvas');
@@ -2854,8 +2956,7 @@ function handleLoanBarcodeDetected(barcode) {
   if (resultDiv) {
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = `
-      <p><strong>掃描到條碼：</strong>${barcode}</p>
-      <p>正在查詢輔具資料...</p>
+      <p><strong>查詢中：</strong>${barcode}</p>
     `;
   }
 
@@ -2889,45 +2990,113 @@ function handleLoanBarcodeDetected(barcode) {
       return;
     }
 
-    currentLoanEquipment = equipment;
-    populateLoanEquipment(equipment);
-    setLoanWorkflowStep('form');
+    const added = addEquipmentToLoanCart(equipment);
+    if (resultDiv) {
+      resultDiv.style.display = 'block';
+      if (added) {
+        resultDiv.innerHTML = `
+          <p style="color: #047857;"><i class="fas fa-circle-check"></i> 已加入清單：<strong>${equipment.equipmentName}</strong> / ${equipment.propertyId}</p>
+          <p>可繼續掃描下一件，或按「下一步：填寫資料」。</p>
+        `;
+      } else {
+        resultDiv.innerHTML = `
+          <p style="color: #B45309;"><i class="fas fa-circle-info"></i> 此輔具已在清單中：<strong>${equipment.equipmentName}</strong> / ${equipment.propertyId}</p>
+        `;
+      }
+    }
+
+    const manualInput = document.getElementById('loanManualPropertyId');
+    if (manualInput) manualInput.value = '';
   });
 }
 
-function populateLoanEquipment(equipment) {
-  const equipmentName = document.getElementById('loanSelectedEquipmentName');
-  const equipmentId = document.getElementById('loanSelectedEquipmentId');
-  const equipmentPhotoWrapper = document.getElementById('loanSelectedEquipmentPhotoWrapper');
-  const equipmentPhoto = document.getElementById('loanSelectedEquipmentPhoto');
-  const startDateInput = document.getElementById('loanStartDate');
-
-  if (equipmentName) equipmentName.textContent = equipment.equipmentName || '未命名輔具';
-  if (equipmentId) equipmentId.textContent = equipment.propertyId || '';
-  if (equipmentPhotoWrapper && equipmentPhoto) {
-    if (equipment.photoUrl) {
-      equipmentPhoto.src = getPhotoDisplayUrl(equipment.photoUrl);
-      equipmentPhoto.onerror = function() {
-        equipmentPhoto.style.display = 'none';
-        equipmentPhotoWrapper.style.display = 'none';
-      };
-      equipmentPhoto.style.display = 'block';
-      equipmentPhotoWrapper.style.display = 'block';
-    } else {
-      equipmentPhoto.removeAttribute('src');
-      equipmentPhoto.onerror = null;
-      equipmentPhoto.style.display = 'none';
-      equipmentPhotoWrapper.style.display = 'none';
-    }
+function addEquipmentToLoanCart(equipment) {
+  if (!equipment || !equipment.propertyId) return false;
+  const exists = currentLoanCart.some(function(item) {
+    return normalizeIdentifier(item.propertyId) === normalizeIdentifier(equipment.propertyId);
+  });
+  if (exists) {
+    renderLoanCart();
+    return false;
   }
+  currentLoanCart.push(equipment);
+  currentLoanEquipment = equipment;
+  renderLoanCart();
+  return true;
+}
+
+function removeEquipmentFromLoanCart(propertyId) {
+  const target = normalizeIdentifier(propertyId);
+  currentLoanCart = currentLoanCart.filter(function(item) {
+    return normalizeIdentifier(item.propertyId) !== target;
+  });
+  if (currentLoanEquipment && normalizeIdentifier(currentLoanEquipment.propertyId) === target) {
+    currentLoanEquipment = currentLoanCart.length ? currentLoanCart[currentLoanCart.length - 1] : null;
+  }
+  renderLoanCart();
+}
+
+function renderLoanCart() {
+  const section = document.getElementById('loanCartSection');
+  const list = document.getElementById('loanCartList');
+  const countEl = document.getElementById('loanCartCount');
+  const proceedBtn = document.getElementById('loanProceedToFormBtn');
+
+  if (!list || !section) return;
+
+  const count = currentLoanCart.length;
+  section.style.display = count > 0 ? 'block' : 'none';
+  if (countEl) countEl.textContent = count + ' 件';
+  if (proceedBtn) proceedBtn.disabled = count === 0;
+
+  list.innerHTML = '';
+  currentLoanCart.forEach(function(item) {
+    const row = document.createElement('div');
+    row.className = 'loan-cart-item';
+    row.innerHTML = `
+      <div class="loan-cart-item-info">
+        <div class="loan-cart-item-name">${item.equipmentName || '未命名輔具'}</div>
+        <div class="loan-cart-item-id">${item.propertyId || ''}</div>
+      </div>
+      <button class="loan-cart-item-remove" type="button" data-property-id="${item.propertyId}" title="移除">
+        <i class="fas fa-xmark"></i>
+      </button>
+    `;
+    const removeBtn = row.querySelector('.loan-cart-item-remove');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function() {
+        removeEquipmentFromLoanCart(item.propertyId);
+      });
+    }
+    list.appendChild(row);
+  });
+}
+
+function renderLoanCartForm() {
+  const list = document.getElementById('loanCartFormList');
+  if (!list) return;
+  list.innerHTML = '';
+  currentLoanCart.forEach(function(item) {
+    const row = document.createElement('div');
+    row.className = 'loan-cart-item';
+    row.innerHTML = `
+      <div class="loan-cart-item-info">
+        <div class="loan-cart-item-name">${item.equipmentName || '未命名輔具'}</div>
+        <div class="loan-cart-item-id">${item.propertyId || ''}</div>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+
+  const startDateInput = document.getElementById('loanStartDate');
   if (startDateInput && !startDateInput.value) {
     startDateInput.value = getCurrentDateTimeLocalString();
   }
 }
 
 function handleLoanFormContinue() {
-  if (!currentLoanEquipment) {
-    showToast('請先掃描輔具條碼', 'error');
+  if (!currentLoanCart.length) {
+    showToast('請先加入至少一件輔具', 'error');
     setLoanWorkflowStep('scan');
     return;
   }
@@ -2963,12 +3132,16 @@ function handleLoanFormContinue() {
 
 function renderLoanSignatureSummary() {
   const summary = document.getElementById('loanSignatureSummary');
-  if (!summary || !currentLoanEquipment || !currentLoanDraft) {
+  if (!summary || !currentLoanCart.length || !currentLoanDraft) {
     return;
   }
 
+  const itemsHtml = currentLoanCart.map(function(item) {
+    return `<div>• ${item.equipmentName} (${item.propertyId})</div>`;
+  }).join('');
+
   summary.innerHTML = `
-    <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentLoanEquipment.equipmentName} (${currentLoanEquipment.propertyId})</span></div>
+    <div class="loan-signature-summary-item"><strong>輔具 (${currentLoanCart.length} 件)</strong><span>${itemsHtml}</span></div>
     <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentLoanDraft.borrower}</span></div>
     <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentLoanDraft.loanStartDate)}</span></div>
     <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentLoanDraft.expectedReturnDate)}</span></div>
@@ -2977,7 +3150,7 @@ function renderLoanSignatureSummary() {
 }
 
 function handleCreateLoan() {
-  if (!currentLoanEquipment || !currentLoanDraft) {
+  if (!currentLoanCart.length || !currentLoanDraft) {
     showToast('請先完成外借資料填寫', 'error');
     return;
   }
@@ -2992,9 +3165,10 @@ function handleCreateLoan() {
     return;
   }
 
-  callAPI('createLoan', {
-    propertyId: currentLoanEquipment.propertyId,
-    equipmentName: currentLoanEquipment.equipmentName,
+  const propertyIds = currentLoanCart.map(function(item) { return item.propertyId; });
+
+  callAPI('createBatchLoan', {
+    propertyIds: JSON.stringify(propertyIds),
     borrower: currentLoanDraft.borrower,
     contactPerson: currentLoanDraft.borrower,
     contactPhone: '',
@@ -3006,7 +3180,8 @@ function handleCreateLoan() {
     notes: ''
   }, function(response) {
     if (response.success) {
-      showToast('外借建立成功', 'success');
+      const count = (response.data && response.data.count) || currentLoanCart.length;
+      showToast('外借建立成功（' + count + ' 件）', 'success');
       closeLoanWorkflow();
       loadLoanList();
       loadMyEquipment();
@@ -3041,6 +3216,45 @@ function openReturnWorkflow(propertyId) {
   startReturnBarcodeScanner();
 }
 
+function openBatchReturnWorkflow(group) {
+  if (!currentUser) {
+    showToast('請先登入', 'error');
+    return;
+  }
+  if (!group || !group.items || !group.items.length) {
+    showToast('找不到批次資料', 'error');
+    return;
+  }
+
+  resetReturnWorkflow();
+
+  const first = group.items[0];
+  currentReturnBatch = {
+    batchId: group.batchId,
+    items: group.items.map(function(item) {
+      return {
+        propertyId: item.propertyId,
+        equipmentName: item.equipmentName
+      };
+    }),
+    borrower: first.loanBorrower || '',
+    loanDate: first.loanDate || '',
+    expectedReturnDate: first.loanExpectedReturnDate || '',
+    purpose: first.loanPurpose || ''
+  };
+
+  const modal = document.getElementById('returnModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+
+  const backBtn = document.getElementById('returnBackToLookupBtn');
+  if (backBtn) backBtn.textContent = '取消';
+
+  renderReturnLoanSummary();
+  setReturnWorkflowStep('form');
+}
+
 function closeReturnWorkflow() {
   const modal = document.getElementById('returnModal');
   if (modal) {
@@ -3053,9 +3267,13 @@ function closeReturnWorkflow() {
 
 function resetReturnWorkflow() {
   currentReturnLoan = null;
+  currentReturnBatch = null;
   currentReturnDraft = null;
   isProcessingReturnScan = false;
   lastReturnScannedCode = '';
+
+  const backBtn = document.getElementById('returnBackToLookupBtn');
+  if (backBtn) backBtn.textContent = '返回查詢';
 
   const manualPropertyInput = document.getElementById('returnManualPropertyId');
   const actualDateInput = document.getElementById('returnActualDate');
@@ -3228,16 +3446,31 @@ function lookupReturnLoanByProperty(propertyId) {
 }
 
 function renderReturnLoanSummary() {
-  if (!currentReturnLoan) return;
+  let summaryHtml = '';
 
-  const summaryHtml = `
-    <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentReturnLoan.equipmentName} (${currentReturnLoan.propertyId})</span></div>
-    <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnLoan.borrower || '歷史資料未建檔'}</span></div>
-    <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.loanDate)}</span></div>
-    <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.expectedReturnDate)}</span></div>
-    <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnLoan.purpose || '歷史資料未建檔'}</span></div>
-    ${currentReturnLoan.isLegacyReturn ? '<div class="loan-signature-summary-item"><strong>資料狀態</strong><span>此筆為歷史外借補登歸還，系統將直接建立歸還紀錄。</span></div>' : ''}
-  `;
+  if (currentReturnBatch) {
+    const itemsHtml = currentReturnBatch.items.map(function(item) {
+      return `<div>• ${item.equipmentName} (${item.propertyId})</div>`;
+    }).join('');
+    summaryHtml = `
+      <div class="loan-signature-summary-item"><strong>批次歸還 (${currentReturnBatch.items.length} 件)</strong><span>${itemsHtml}</span></div>
+      <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnBatch.borrower || '—'}</span></div>
+      <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentReturnBatch.loanDate)}</span></div>
+      <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentReturnBatch.expectedReturnDate)}</span></div>
+      <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnBatch.purpose || '—'}</span></div>
+    `;
+  } else if (currentReturnLoan) {
+    summaryHtml = `
+      <div class="loan-signature-summary-item"><strong>輔具</strong><span>${currentReturnLoan.equipmentName} (${currentReturnLoan.propertyId})</span></div>
+      <div class="loan-signature-summary-item"><strong>借用人/單位</strong><span>${currentReturnLoan.borrower || '歷史資料未建檔'}</span></div>
+      <div class="loan-signature-summary-item"><strong>借用起始日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.loanDate)}</span></div>
+      <div class="loan-signature-summary-item"><strong>預計歸還日期時間</strong><span>${formatDisplayDateTime(currentReturnLoan.expectedReturnDate)}</span></div>
+      <div class="loan-signature-summary-item"><strong>借用目的</strong><span>${currentReturnLoan.purpose || '歷史資料未建檔'}</span></div>
+      ${currentReturnLoan.isLegacyReturn ? '<div class="loan-signature-summary-item"><strong>資料狀態</strong><span>此筆為歷史外借補登歸還，系統將直接建立歸還紀錄。</span></div>' : ''}
+    `;
+  } else {
+    return;
+  }
 
   const loanSummary = document.getElementById('returnLoanSummary');
   const signatureSummary = document.getElementById('returnSignatureSummary');
@@ -3252,14 +3485,15 @@ function renderReturnLoanSummary() {
 }
 
 function handleReturnFormContinue() {
-  if (!currentReturnLoan) {
+  if (!currentReturnLoan && !currentReturnBatch) {
     showToast('請先查詢外借資料', 'error');
     setReturnWorkflowStep('lookup');
     return;
   }
 
   const actualReturnDate = document.getElementById('returnActualDate').value;
-  const loanDate = normalizeDateString(currentReturnLoan.loanDate);
+  const loanDateRaw = currentReturnBatch ? currentReturnBatch.loanDate : currentReturnLoan.loanDate;
+  const loanDate = normalizeDateString(loanDateRaw);
 
   if (!actualReturnDate) {
     showToast('請填寫實際歸還日期', 'error');
@@ -3283,7 +3517,7 @@ function handleReturnFormContinue() {
 }
 
 function handleReturnLoanSubmit() {
-  if (!currentReturnLoan || !currentReturnDraft) {
+  if ((!currentReturnLoan && !currentReturnBatch) || !currentReturnDraft) {
     showToast('請先完成歸還資料填寫', 'error');
     return;
   }
@@ -3295,6 +3529,26 @@ function handleReturnLoanSubmit() {
 
   if (!signatureData) {
     showToast('請先完成中心人員簽名', 'error');
+    return;
+  }
+
+  if (currentReturnBatch) {
+    callAPI('returnBatchLoan', {
+      batchId: currentReturnBatch.batchId,
+      actualReturnDate: currentReturnDraft.actualReturnDate,
+      staffName: currentUser.name,
+      signatureData: signatureData
+    }, function(response) {
+      if (response.success) {
+        const count = (response.data && response.data.count) || currentReturnBatch.items.length;
+        showToast('批次歸還完成（' + count + ' 件）', 'success');
+        closeReturnWorkflow();
+        loadLoanList();
+        loadMyEquipment();
+      } else {
+        showToast(response.message || '批次歸還失敗', 'error');
+      }
+    });
     return;
   }
 

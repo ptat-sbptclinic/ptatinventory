@@ -111,26 +111,37 @@ function setupPhotoFileInput() {
     
     const reader = new FileReader();
     reader.onload = function(e) {
-      const photoData = e.target.result;
-      
-      const video = document.getElementById('photoVideo');
-      const preview = document.getElementById('photoPreview');
-      const captureBtn = document.getElementById('capturePhotoBtn');
-      const retakeBtn = document.getElementById('retakePhotoBtn');
-      const uploadBtn = document.getElementById('uploadPhotoBtn');
-      
-      stopCamera();
-      
-      capturedPhoto = photoData;
-      preview.src = capturedPhoto;
-      preview.style.display = 'block';
-      video.style.display = 'none';
-      
-      captureBtn.style.display = 'none';
-      retakeBtn.style.display = 'block';
-      uploadBtn.style.display = 'block';
-      
-      fileInput.value = '';
+      const rawData = e.target.result;
+
+      compressImage(
+        rawData,
+        CONFIG.PHOTO_SETTINGS.maxWidth || 1920,
+        CONFIG.PHOTO_SETTINGS.maxHeight || 1920,
+        CONFIG.PHOTO_SETTINGS.quality || 0.8
+      ).then(function(compressed) {
+        const video = document.getElementById('photoVideo');
+        const preview = document.getElementById('photoPreview');
+        const captureBtn = document.getElementById('capturePhotoBtn');
+        const retakeBtn = document.getElementById('retakePhotoBtn');
+        const uploadBtn = document.getElementById('uploadPhotoBtn');
+
+        stopCamera();
+
+        capturedPhoto = compressed;
+        preview.src = capturedPhoto;
+        preview.style.display = 'block';
+        video.style.display = 'none';
+
+        captureBtn.style.display = 'none';
+        retakeBtn.style.display = 'block';
+        uploadBtn.style.display = 'block';
+
+        fileInput.value = '';
+      }).catch(function(err) {
+        console.error('照片壓縮失敗:', err);
+        showToast('照片處理失敗，請重試', 'error');
+        fileInput.value = '';
+      });
     };
     reader.readAsDataURL(file);
   });
@@ -143,27 +154,36 @@ function capturePhoto() {
   const captureBtn = document.getElementById('capturePhotoBtn');
   const retakeBtn = document.getElementById('retakePhotoBtn');
   const uploadBtn = document.getElementById('uploadPhotoBtn');
-  
-  // 設定 canvas 尺寸
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  
-  // 繪製影像
-  const context = canvas.getContext('2d');
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  
-  // 壓縮照片
+
+  const maxWidth = CONFIG.PHOTO_SETTINGS.maxWidth || 1920;
+  const maxHeight = CONFIG.PHOTO_SETTINGS.maxHeight || 1920;
   const quality = CONFIG.PHOTO_SETTINGS.quality || 0.8;
+
+  let width = video.videoWidth;
+  let height = video.videoHeight;
+
+  if (width > maxWidth || height > maxHeight) {
+    const ratio = Math.min(maxWidth / width, maxHeight / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  context.drawImage(video, 0, 0, width, height);
+
   capturedPhoto = canvas.toDataURL('image/jpeg', quality);
-  
+
   // 顯示預覽
   preview.src = capturedPhoto;
   preview.style.display = 'block';
   video.style.display = 'none';
-  
+
   // 停止相機
   stopCamera();
-  
+
   // 更新按鈕
   captureBtn.style.display = 'none';
   retakeBtn.style.display = 'block';

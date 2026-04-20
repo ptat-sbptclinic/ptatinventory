@@ -498,13 +498,13 @@
 
           <section id="loanScanStep" class="loan-step-panel active">
             <div class="scan-instructions loan-scan-instructions">
-              <p><i class="fas fa-camera"></i> 可用相機掃描或直接輸入財產編號，不需拍照</p>
+              <p><i class="fas fa-camera"></i> 可連續掃描或輸入多筆財產編號；加入清單後可一次簽名完成外借</p>
             </div>
 
             <div class="loan-manual-entry">
               <input type="text" id="loanManualPropertyId" class="form-control" placeholder="輸入財產編號，例如 AA123456">
               <button id="searchLoanPropertyBtn" class="btn btn-secondary" type="button">
-                <i class="fas fa-magnifying-glass"></i> 查詢財編
+                <i class="fas fa-plus"></i> 加入清單
               </button>
             </div>
 
@@ -534,16 +534,26 @@
             </div>
 
             <div id="loanScanResult" class="scan-result" style="display: none;"></div>
+
+            <div id="loanCartSection" class="loan-cart-section" style="display: none;">
+              <div class="loan-cart-header">
+                <strong>本次外借清單</strong>
+                <span id="loanCartCount" class="loan-cart-count">0 件</span>
+              </div>
+              <div id="loanCartList" class="loan-cart-list"></div>
+            </div>
+
+            <div class="button-group loan-flow-actions">
+              <button id="loanProceedToFormBtn" class="btn btn-primary" type="button" disabled>
+                <i class="fas fa-arrow-right"></i> 下一步：填寫資料
+              </button>
+            </div>
           </section>
 
           <section id="loanFormStep" class="loan-step-panel">
             <div class="loan-selected-equipment">
-              <div id="loanSelectedEquipmentPhotoWrapper" class="loan-selected-equipment-photo" style="display: none;">
-                <img id="loanSelectedEquipmentPhoto" class="loan-selected-equipment-photo-image" alt="輔具照片" style="display: none;">
-              </div>
               <div class="loan-selected-equipment-label">本次外借輔具</div>
-              <div id="loanSelectedEquipmentName" class="loan-selected-equipment-name">尚未掃描</div>
-              <div id="loanSelectedEquipmentId" class="loan-selected-equipment-id"></div>
+              <div id="loanCartFormList" class="loan-cart-list"></div>
             </div>
 
             <div class="form-group">

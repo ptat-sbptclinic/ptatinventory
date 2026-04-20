@@ -1530,6 +1530,99 @@ textarea.form-control {
   font-size: 0.95rem;
 }
 
+.loan-cart-section {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  margin: 1rem 0;
+}
+
+.loan-cart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  color: var(--gray-700);
+}
+
+.loan-cart-count {
+  background: #6366F1;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.loan-cart-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.loan-cart-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.loan-cart-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.loan-cart-item-name {
+  font-weight: 600;
+  color: var(--gray-800);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loan-cart-item-id {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+}
+
+.loan-cart-item-remove {
+  background: transparent;
+  border: none;
+  color: #DC2626;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+}
+
+.loan-cart-item-remove:hover {
+  color: #991B1B;
+}
+
+.loan-batch-preview {
+  list-style: none;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0;
+  background: #F1F5F9;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--gray-700);
+}
+
+.loan-batch-preview li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .loan-flow-actions {
   justify-content: space-between;
 }
