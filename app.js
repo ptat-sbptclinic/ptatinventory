@@ -2008,6 +2008,11 @@ function hideReportResult() {
 function hasInventoryActivityThisMonth(equipment) {
   if (!equipment) return false;
 
+  // 外借中的輔具不在現場，無法盤點，視為已盤點以避免被標示未盤點
+  if (equipment.currentStatus === '外借中') {
+    return true;
+  }
+
   const lastInventoryDate = parsePossibleDate(equipment.lastInventory);
   const activityAtDate = parsePossibleDate(equipment.activityAt);
   const now = new Date();
