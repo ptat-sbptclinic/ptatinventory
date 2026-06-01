@@ -386,10 +386,8 @@ function performQuickInventory(params) {
   // 更新輔具清單
   const now = new Date();
   const timeString = formatDateTime(now);
-  sheet.getRange(rowIndex, EQUIPMENT_COLS.LAST_INVENTORY + 1).setValue(timeString);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
-  sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(timeString);
-  sheet.getRange(rowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(timeString);
+  touchEquipmentRow(sheet, rowIndex, now, { markInventory: true });
   
   if (photoUrl) {
     sheet.getRange(rowIndex, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
@@ -475,17 +473,21 @@ function handleCreateLoan(e) {
   ensureEquipmentSheetColumns(equipSheet);
   const equipData = equipSheet.getDataRange().getValues();
   let equipmentRow = -1;
-  
+  let oldLocation = '';
+  let oldCurrentStatus = '';
+
   for (let i = 1; i < equipData.length; i++) {
     if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
       if (equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] === '外借中') {
         return createResponse(false, '此輔具目前已外借');
       }
       equipmentRow = i + 1;
+      oldLocation = equipData[i][EQUIPMENT_COLS.LOCATION] || '';
+      oldCurrentStatus = equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
       break;
     }
   }
-  
+
   if (equipmentRow === -1) {
     return createResponse(false, '找不到此輔具');
   }
@@ -538,8 +540,21 @@ function handleCreateLoan(e) {
 
   // 更新輔具狀態為「外借中」
   equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
-  equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
-  equipSheet.getRange(equipmentRow, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+  touchEquipmentRow(equipSheet, equipmentRow, now, { markInventory: true });
+
+  addInventoryLog({
+    propertyId: propertyId,
+    staffName: staffName,
+    method: '建立外借',
+    oldLocation: oldLocation,
+    newLocation: oldLocation,
+    oldCurrentStatus: oldCurrentStatus,
+    newCurrentStatus: '外借中',
+    currentAction: '',
+    hasPhoto: '否',
+    photoUrl: '',
+    notes: '外借時同步標記為已盤點'
+  });
 
   return createResponse(true, '外借記錄建立成功', { loanId: loanId });
 }
@@ -603,6 +618,8 @@ function handleCreateBatchLoan(e) {
         equipmentInfo.push({
           propertyId: pid,
           equipmentName: equipData[i][EQUIPMENT_COLS.EQUIPMENT_NAME] || '',
+          oldLocation: equipData[i][EQUIPMENT_COLS.LOCATION] || '',
+          oldCurrentStatus: equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] || '',
           rowIndex: i + 1
         });
         found = true;
@@ -675,10 +692,23 @@ function handleCreateBatchLoan(e) {
 
   // 更新每件輔具狀態為「外借中」
   for (let i = 0; i < equipmentInfo.length; i++) {
-    const row = equipmentInfo[i].rowIndex;
-    equipSheet.getRange(row, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
-    equipSheet.getRange(row, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
-    equipSheet.getRange(row, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+    const info = equipmentInfo[i];
+    equipSheet.getRange(info.rowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('外借中');
+    touchEquipmentRow(equipSheet, info.rowIndex, now, { markInventory: true });
+
+    addInventoryLog({
+      propertyId: info.propertyId,
+      staffName: staffName,
+      method: '批次外借',
+      oldLocation: info.oldLocation,
+      newLocation: info.oldLocation,
+      oldCurrentStatus: info.oldCurrentStatus,
+      newCurrentStatus: '外借中',
+      currentAction: '',
+      hasPhoto: '否',
+      photoUrl: '',
+      notes: '批次外借時同步標記為已盤點'
+    });
   }
 
   return createResponse(true, '批次外借建立成功', {
@@ -762,10 +792,14 @@ function handleUpdateEquipmentDetails(e) {
   ensureEquipmentSheetColumns(sheet);
   const data = sheet.getDataRange().getValues();
   let rowIndex = -1;
+  let oldLocation = '';
+  let oldCurrentStatus = '';
 
   for (let i = 1; i < data.length; i++) {
     if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
       rowIndex = i + 1;
+      oldLocation = data[i][EQUIPMENT_COLS.LOCATION] || '';
+      oldCurrentStatus = data[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
       break;
     }
   }
@@ -779,8 +813,21 @@ function handleUpdateEquipmentDetails(e) {
   sheet.getRange(rowIndex, EQUIPMENT_COLS.LOCATION + 1).setValue(location);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
   sheet.getRange(rowIndex, EQUIPMENT_COLS.NOTES + 1).setValue(notes);
-  sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
-  sheet.getRange(rowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+  touchEquipmentRow(sheet, rowIndex, now, { markInventory: true });
+
+  addInventoryLog({
+    propertyId: propertyId,
+    staffName: '',
+    method: '編輯資料',
+    oldLocation: oldLocation,
+    newLocation: location,
+    oldCurrentStatus: oldCurrentStatus,
+    newCurrentStatus: oldCurrentStatus,
+    currentAction: currentAction,
+    hasPhoto: '否',
+    photoUrl: '',
+    notes: '編輯輔具資料時同步標記為已盤點'
+  });
 
   const updatedRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
   return createResponse(true, '輔具資料更新成功', createEquipmentObject(updatedRow));
@@ -950,9 +997,24 @@ function handleReturnLoan(e) {
   
   for (let i = 1; i < equipData.length; i++) {
     if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === normalizeIdentifier(propertyId)) {
+      const oldLocation = equipData[i][EQUIPMENT_COLS.LOCATION] || '';
+      const oldCurrentStatus = equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
       equipSheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
-      equipSheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
-      equipSheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+      touchEquipmentRow(equipSheet, i + 1, now, { markInventory: true });
+
+      addInventoryLog({
+        propertyId: propertyId,
+        staffName: staffName,
+        method: '歸還',
+        oldLocation: oldLocation,
+        newLocation: oldLocation,
+        oldCurrentStatus: oldCurrentStatus,
+        newCurrentStatus: '展示中',
+        currentAction: '',
+        hasPhoto: '否',
+        photoUrl: '',
+        notes: '歸還時同步標記為已盤點'
+      });
       break;
     }
   }
@@ -1039,9 +1101,24 @@ function handleReturnBatchLoan(e) {
     const targetPid = normalizeIdentifier(targetRows[t].propertyId);
     for (let i = 1; i < equipData.length; i++) {
       if (normalizeIdentifier(equipData[i][EQUIPMENT_COLS.PROPERTY_ID]) === targetPid) {
+        const oldLocation = equipData[i][EQUIPMENT_COLS.LOCATION] || '';
+        const oldCurrentStatus = equipData[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
         equipSheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
-        equipSheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
-        equipSheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+        touchEquipmentRow(equipSheet, i + 1, now, { markInventory: true });
+
+        addInventoryLog({
+          propertyId: targetRows[t].propertyId,
+          staffName: staffName,
+          method: '批次歸還',
+          oldLocation: oldLocation,
+          newLocation: oldLocation,
+          oldCurrentStatus: oldCurrentStatus,
+          newCurrentStatus: '展示中',
+          currentAction: '',
+          hasPhoto: '否',
+          photoUrl: '',
+          notes: '批次歸還時同步標記為已盤點'
+        });
         break;
       }
     }
@@ -1190,23 +1267,20 @@ function handleUploadPhoto(e) {
     for (let i = 1; i < data.length; i++) {
       if (normalizeIdentifier(data[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
         const activityTime = new Date();
-        const timeString = formatDateTime(activityTime);
         const equipmentName = data[i][EQUIPMENT_COLS.EQUIPMENT_NAME] || '';
         const currentAction = determineCurrentAction(equipmentName);
         const oldLocation = data[i][EQUIPMENT_COLS.LOCATION] || '';
         const oldCurrentStatus = data[i][EQUIPMENT_COLS.CURRENT_STATUS] || '';
 
         sheet.getRange(i + 1, EQUIPMENT_COLS.PHOTO_URL + 1).setValue(photoUrl);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.LAST_INVENTORY + 1).setValue(timeString);
         sheet.getRange(i + 1, EQUIPMENT_COLS.CURRENT_ACTION + 1).setValue(currentAction);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(timeString);
-        sheet.getRange(i + 1, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(timeString);
+        touchEquipmentRow(sheet, i + 1, activityTime, { markInventory: true });
 
         data[i][EQUIPMENT_COLS.PHOTO_URL] = photoUrl;
-        data[i][EQUIPMENT_COLS.LAST_INVENTORY] = timeString;
+        data[i][EQUIPMENT_COLS.LAST_INVENTORY] = activityTime;
         data[i][EQUIPMENT_COLS.CURRENT_ACTION] = currentAction;
-        data[i][EQUIPMENT_COLS.UPDATED_AT] = timeString;
-        data[i][EQUIPMENT_COLS.ACTIVITY_AT] = timeString;
+        data[i][EQUIPMENT_COLS.UPDATED_AT] = activityTime;
+        data[i][EQUIPMENT_COLS.ACTIVITY_AT] = activityTime;
 
         if (staffName) {
           addInventoryLog({
@@ -1691,6 +1765,15 @@ function extractArea(propertyId, keeper) {
   return '';
 }
 
+function touchEquipmentRow(sheet, rowIndex, now, options) {
+  const opts = options || {};
+  if (opts.markInventory) {
+    sheet.getRange(rowIndex, EQUIPMENT_COLS.LAST_INVENTORY + 1).setValue(now);
+  }
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.UPDATED_AT + 1).setValue(now);
+  sheet.getRange(rowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(now);
+}
+
 function addInventoryLog(logData) {
   const logSheet = getSheet(SHEET_NAMES.INVENTORY_LOG);
   const logId = 'LOG-' + Utilities.formatDate(new Date(), 'GMT+8', 'yyyyMMddHHmmss');
@@ -1889,15 +1972,31 @@ function handleCreateMaintenance(e) {
 
   const isComplete = !!completeDate;
   const newStatus = isComplete ? '展示中' : '維護中';
+  const now = new Date();
+  const oldLocation = currentEquipment[EQUIPMENT_COLS.LOCATION] || '';
+  const oldCurrentStatus = currentEquipment[EQUIPMENT_COLS.CURRENT_STATUS] || '';
 
   equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue(newStatus);
-  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+  touchEquipmentRow(equipmentSheet, equipmentRowIndex, now, { markInventory: true });
+
+  addInventoryLog({
+    propertyId: propertyId,
+    staffName: staffName,
+    method: isComplete ? '建立維護(同步驗收)' : '建立維護',
+    oldLocation: oldLocation,
+    newLocation: oldLocation,
+    oldCurrentStatus: oldCurrentStatus,
+    newCurrentStatus: newStatus,
+    currentAction: '',
+    hasPhoto: '否',
+    photoUrl: '',
+    notes: '建立維護時同步標記為已盤點'
+  });
 
   const maintenanceSheet = getSheet(SHEET_NAMES.MAINTENANCE);
   ensureMaintenanceSheetColumns(maintenanceSheet);
 
   const maintenanceId = generateMaintenanceId();
-  const now = new Date();
 
   const newRow = [
     maintenanceId,
@@ -1988,16 +2087,35 @@ function handleCompleteMaintenance(e) {
   const equipmentData = equipmentSheet.getDataRange().getValues();
 
   let equipmentRowIndex = -1;
+  let currentEquipment = null;
   for (let i = 1; i < equipmentData.length; i++) {
     if (normalizeIdentifier(equipmentData[i][EQUIPMENT_COLS.PROPERTY_ID]) === propertyId) {
       equipmentRowIndex = i + 1;
+      currentEquipment = equipmentData[i];
       break;
     }
   }
 
   if (equipmentRowIndex !== -1) {
+    const now = new Date();
+    const oldLocation = currentEquipment[EQUIPMENT_COLS.LOCATION] || '';
+    const oldCurrentStatus = currentEquipment[EQUIPMENT_COLS.CURRENT_STATUS] || '';
     equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('展示中');
-    equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+    touchEquipmentRow(equipmentSheet, equipmentRowIndex, now, { markInventory: true });
+
+    addInventoryLog({
+      propertyId: propertyId,
+      staffName: staffName,
+      method: '完成維護',
+      oldLocation: oldLocation,
+      newLocation: oldLocation,
+      oldCurrentStatus: oldCurrentStatus,
+      newCurrentStatus: '展示中',
+      currentAction: '',
+      hasPhoto: '否',
+      photoUrl: '',
+      notes: '完成維護時同步標記為已盤點'
+    });
   }
 
   return createResponse(true, '維護已完成，輔具已改為展示中', {
@@ -2039,14 +2157,14 @@ function handleCreateScrap(e) {
     return createResponse(false, '找不到此財產編號對應的輔具');
   }
 
+  const now = new Date();
   equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.CURRENT_STATUS + 1).setValue('已報廢');
-  equipmentSheet.getRange(equipmentRowIndex, EQUIPMENT_COLS.ACTIVITY_AT + 1).setValue(new Date());
+  touchEquipmentRow(equipmentSheet, equipmentRowIndex, now, { markInventory: false });
 
   const scrapSheet = getSheet(SHEET_NAMES.SCRAP);
   ensureScrapSheetColumns(scrapSheet);
 
   const scrapId = generateScrapId();
-  const now = new Date();
 
   const newRow = [
     scrapId,
@@ -2143,15 +2261,6 @@ function handleUpdateScrapDocumentStatus(e) {
   }
 
   return createResponse(false, '找不到此財產編號的報廢紀錄');
-}
-
-function getSheet(name) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-  }
-  return sheet;
 }
 
 function createResponse(success, message, data = null) {
