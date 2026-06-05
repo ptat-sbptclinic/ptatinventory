@@ -1357,11 +1357,17 @@ function handleGenerateMonthlyMaintenanceReport(e) {
     const currentStatus = row[EQUIPMENT_COLS.CURRENT_STATUS] || '';
     // 外借中或維護中的輔具不在保管人手上，無法現場盤點，仍須列入清冊以呈現原因
     const isLoanOrMaintenance = currentStatus === '外借中' || currentStatus === '維護中';
+    const lastInventoryRaw = parseSheetDateValue(row[EQUIPMENT_COLS.LAST_INVENTORY]);
+    const lastInventoryInMonth = lastInventoryRaw && isDateInMonth(lastInventoryRaw, monthInfo.year, monthInfo.monthIndex);
 
+    // 納入條件 (聯集)：
+    // 1) 當月盤點記錄表有 log
+    // 2) 目前 LAST_INVENTORY 落在當月 (補救沒寫進 log 的盤點)
+    // 3) 目前狀態為 外借中 / 維護中
     let inventoryTime = lastInventoryByPid[pidKey] || null;
-    if (!inventoryTime && !isLoanOrMaintenance) continue;
+    if (!inventoryTime && !lastInventoryInMonth && !isLoanOrMaintenance) continue;
     if (!inventoryTime) {
-      inventoryTime = parseSheetDateValue(row[EQUIPMENT_COLS.LAST_INVENTORY]);
+      inventoryTime = lastInventoryRaw;
     }
 
     reportRows.push({
