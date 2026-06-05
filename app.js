@@ -2008,8 +2008,8 @@ function hideReportResult() {
 function hasInventoryActivityThisMonth(equipment) {
   if (!equipment) return false;
 
-  // 外借中的輔具不在現場，無法盤點，視為已盤點以避免被標示未盤點
-  if (equipment.currentStatus === '外借中') {
+  // 外借中或維護中的輔具不在保管人手上，無法現場盤點，視為已盤點以避免被標示未盤點
+  if (equipment.currentStatus === '外借中' || equipment.currentStatus === '維護中') {
     return true;
   }
 

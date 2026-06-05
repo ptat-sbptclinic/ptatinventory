@@ -1326,6 +1326,21 @@ function handleGenerateMonthlyMaintenanceReport(e) {
     return createResponse(false, '月份格式錯誤，請使用 YYYY-MM');
   }
 
+  // 從盤點記錄表收集當月每件輔具的最後一次盤點時間
+  // 這樣即使後續月份再次盤點該輔具，歷史月份的報表仍能正確呈現當時的盤點時間
+  const logSheet = getSheet(SHEET_NAMES.INVENTORY_LOG);
+  const logData = logSheet.getDataRange().getValues();
+  const lastInventoryByPid = {};
+  for (let i = 1; i < logData.length; i++) {
+    const pid = normalizeIdentifier(logData[i][1]);
+    const dt = parseSheetDateValue(logData[i][2]);
+    if (!pid || !dt) continue;
+    if (!isDateInMonth(dt, monthInfo.year, monthInfo.monthIndex)) continue;
+    if (!lastInventoryByPid[pid] || dt.getTime() > lastInventoryByPid[pid].getTime()) {
+      lastInventoryByPid[pid] = dt;
+    }
+  }
+
   const equipmentSheet = getSheet(SHEET_NAMES.EQUIPMENT);
   const equipmentData = equipmentSheet.getDataRange().getValues();
   const reportRows = [];
@@ -1335,12 +1350,19 @@ function handleGenerateMonthlyMaintenanceReport(e) {
     const propertyId = row[EQUIPMENT_COLS.PROPERTY_ID];
     if (!propertyId) continue;
 
-    const lastInventory = parseSheetDateValue(row[EQUIPMENT_COLS.LAST_INVENTORY]);
-    if (!lastInventory) continue;
-    if (!isDateInMonth(lastInventory, monthInfo.year, monthInfo.monthIndex)) continue;
-
     const equipmentArea = extractArea(propertyId, row[EQUIPMENT_COLS.KEEPER]);
     if (area && equipmentArea !== area) continue;
+
+    const pidKey = normalizeIdentifier(propertyId);
+    const currentStatus = row[EQUIPMENT_COLS.CURRENT_STATUS] || '';
+    // 外借中或維護中的輔具不在保管人手上，無法現場盤點，仍須列入清冊以呈現原因
+    const isLoanOrMaintenance = currentStatus === '外借中' || currentStatus === '維護中';
+
+    let inventoryTime = lastInventoryByPid[pidKey] || null;
+    if (!inventoryTime && !isLoanOrMaintenance) continue;
+    if (!inventoryTime) {
+      inventoryTime = parseSheetDateValue(row[EQUIPMENT_COLS.LAST_INVENTORY]);
+    }
 
     reportRows.push({
       sequence: reportRows.length + 1,
@@ -1348,9 +1370,9 @@ function handleGenerateMonthlyMaintenanceReport(e) {
       location: row[EQUIPMENT_COLS.LOCATION] || '',
       propertyId: propertyId,
       keeper: row[EQUIPMENT_COLS.KEEPER] || '',
-      currentStatus: row[EQUIPMENT_COLS.CURRENT_STATUS] || '',
+      currentStatus: currentStatus,
       currentAction: row[EQUIPMENT_COLS.CURRENT_ACTION] || '',
-      inventoryTime: lastInventory
+      inventoryTime: inventoryTime
     });
   }
 
@@ -1479,7 +1501,7 @@ function buildMonthlyReportHtml(title, reportRows) {
       '<td class="col-keeper">' + escapeHtml(row.keeper) + '</td>' +
       '<td class="col-status">' + renderStatusHtml(row.currentStatus) + '</td>' +
       '<td class="col-action">' + renderCurrentActionHtml(row.currentAction) + '</td>' +
-      '<td class="col-time">' + formatReportDateTime(row.inventoryTime) + '</td>' +
+      '<td class="col-time">' + formatNullableReportDateTime(row.inventoryTime) + '</td>' +
       '</tr>';
   }).join('');
 
